@@ -1,5 +1,7 @@
 """Tests for the UI-independent session workflow service."""
 
+import hashlib
+
 import pytest
 
 from siegesense.domain.models import ObservationKind
@@ -48,3 +50,27 @@ def test_invalid_timestamp_is_rejected(service: SessionService) -> None:
     session = service.create_session("Review", duration_ms=1000)
     with pytest.raises(ValueError, match="exceeds"):
         service.add_observation(session.id, 1001, "Outside clip")
+
+
+def test_fingerprint_session_media_hashes_and_persists_recording(service: SessionService, tmp_path) -> None:
+    media = tmp_path / "match.mp4"
+    media.write_bytes(b"first chunk and second chunk")
+    session = service.create_session("Fingerprint test", media_path=str(media))
+
+    fingerprint = service.fingerprint_session_media(session.id, chunk_size=5)
+
+    assert fingerprint == hashlib.sha256(media.read_bytes()).hexdigest()
+    stored = service.list_sessions()[0]
+    assert stored.media_sha256 == fingerprint
+
+
+def test_fingerprint_session_media_rejects_missing_recording(service: SessionService) -> None:
+    session = service.create_session("Missing file", media_path="/definitely/not/a/recording.mp4")
+    with pytest.raises(ValueError, match="does not exist"):
+        service.fingerprint_session_media(session.id)
+
+
+def test_fingerprint_session_media_rejects_missing_path(service: SessionService) -> None:
+    session = service.create_session("No media")
+    with pytest.raises(ValueError, match="no recording path"):
+        service.fingerprint_session_media(session.id)
