@@ -14,6 +14,15 @@ from siegesense.vision.annotations import ALLOWED_LABELS, load_dataset
 
 
 @dataclass(frozen=True, slots=True)
+class AgreementSummary:
+    source_sha256: str
+    overlapping_frames: int
+    exact_agreement: int
+    observed_agreement: float
+    cohens_kappa: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetSummary:
     dataset_name: str
     recording_count: int
@@ -49,3 +58,42 @@ def summarize_datasets(
             )
         )
     return tuple(summaries)
+
+
+def compare_annotators(
+    first_path: str | Path,
+    second_path: str | Path,
+) -> AgreementSummary:
+    """Compare two human-labelled datasets on the exact same sampled frames."""
+    first = load_dataset(first_path)
+    second = load_dataset(second_path)
+    if first.source_sha256 != second.source_sha256:
+        raise ValueError("Annotator datasets must reference the same source recording")
+    first_labels = {
+        (item.timestamp_ms, item.frame_filename): item.label
+        for item in first.annotations
+    }
+    second_labels = {
+        (item.timestamp_ms, item.frame_filename): item.label
+        for item in second.annotations
+    }
+    common_frames = sorted(first_labels.keys() & second_labels.keys())
+    if not common_frames:
+        raise ValueError("Annotator datasets have no overlapping labelled frames")
+    count = len(common_frames)
+    exact = sum(first_labels[frame] == second_labels[frame] for frame in common_frames)
+    observed = exact / count
+    first_counts = Counter(first_labels[frame] for frame in common_frames)
+    second_counts = Counter(second_labels[frame] for frame in common_frames)
+    expected = sum(
+        first_counts[label] * second_counts[label] for label in ALLOWED_LABELS
+    ) / (count * count)
+    denominator = 1.0 - expected
+    kappa = (observed - expected) / denominator if denominator else None
+    return AgreementSummary(
+        source_sha256=first.source_sha256,
+        overlapping_frames=count,
+        exact_agreement=exact,
+        observed_agreement=observed,
+        cohens_kappa=kappa,
+    )
