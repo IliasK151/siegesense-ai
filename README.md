@@ -59,6 +59,19 @@ pytest
 ruff check .
 ```
 
+## Review a gameplay recording locally
+
+The current annotation workflow is manual and intended to help build a responsibly validated dataset. It does not detect targets or measure aim automatically.
+
+1. Launch SiegeSense AI and open **Clip Annotation**.
+2. Choose **Select gameplay video** and select a local recording. Choose an output folder (or use the suggested `<video-name>_frames` folder).
+3. Set the sampling interval and choose **Sample frames**. A shorter interval produces more images and uses more disk space; it does not guarantee precise measurement of a flick or reaction time.
+4. Review the sampled frames and label only what is visible. Use **ambiguous** or **unusable** when the image does not support a confident label. Follow the [annotation guide](docs/ANNOTATION_GUIDE.md).
+5. Save the annotation dataset locally. If you want to link a label to Session Review, select the matching session and use the link action; the app checks recording identity when the available paths/fingerprints permit it.
+6. Use **Export local evaluation report…** to write a JSON summary. The report describes annotation coverage and, if supplied, reviewer agreement. It explicitly does not claim model performance or aim accuracy.
+
+**Keep the evidence honest:** frame labels are human observations, not ground truth for your overall skill. A manually selected on-target share is not accuracy, hit probability, or a representative performance score. Store recordings, sampled frames, annotations, and reports outside version control; they can contain personal information.
+
 ## Project workflow
 
 - Use [GitHub Issues](https://github.com/IliasK151/siegesense-ai/issues) for tasks and defects.
