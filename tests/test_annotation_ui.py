@@ -19,7 +19,9 @@ def app() -> QApplication:
     return instance if instance is not None else QApplication([])
 
 
-def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, tmp_path: Path) -> None:
+def test_annotation_workspace_loads_frame_and_persists_label(
+    app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     frames_dir = tmp_path / "sampled"
     frames_dir.mkdir()
     frame_name = "frame_000000000ms.png"
@@ -68,6 +70,17 @@ def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, 
         assert "Saved" in window.annotation_status.text()
         assert "off target: 1" in window.annotation_summary_label.text()
         assert "not aim accuracy" in window.annotation_summary_label.text()
+
+        report_path = frames_dir / "evaluation-report.json"
+        monkeypatch.setattr(
+            "siegesense.ui.shell.QFileDialog.getSaveFileName",
+            lambda *_args, **_kwargs: (str(report_path), "JSON report (*.json)"),
+        )
+        window._export_annotation_report()
+        assert report_path.is_file()
+        exported = json.loads(report_path.read_text(encoding="utf-8"))
+        assert exported["model_performance_evaluated"] is False
+        assert "does not measure model performance" in window.annotation_status.text()
 
         window.annotation_history_list.setCurrentRow(0)
         window.annotation_label_combo.setCurrentIndex(
