@@ -22,7 +22,7 @@ def db() -> Database:
 
 def test_schema_is_versioned(db: Database) -> None:
     version = db._connection.execute("PRAGMA user_version").fetchone()[0]
-    assert version == SCHEMA_VERSION == 1
+    assert version == SCHEMA_VERSION == 2
 
 
 def test_sessions_round_trip_and_demo_filter(db: Database) -> None:
@@ -33,6 +33,9 @@ def test_sessions_round_trip_and_demo_filter(db: Database) -> None:
     assert [item.id for item in db.list_sessions()] == ["real"]
     assert {item.id for item in db.list_sessions(include_demo=True)} == {"real", "demo"}
     assert db.get_session("real").title == "Ranked review"
+    fingerprinted = Session(id="fingerprinted", media_sha256="a" * 64)
+    db.add_session(fingerprinted)
+    assert db.get_session("fingerprinted").media_sha256 == "a" * 64
 
 
 def test_observation_round_trip_keeps_tags_and_order(db: Database) -> None:
@@ -83,3 +86,8 @@ def test_demo_experiment_cannot_use_real_snapshot(db: Database) -> None:
     db.add_settings_snapshot(SettingsSnapshot(id="real", values={"sens": 6}))
     with pytest.raises(ValueError, match="provenance"):
         db.add_experiment(SettingsExperiment(title="Example", hypothesis="Demo only", baseline_snapshot_id="real", is_demo=True))
+
+
+def test_session_rejects_malformed_media_fingerprint() -> None:
+    with pytest.raises(ValueError, match="SHA-256"):
+        Session(id="bad", media_sha256="not-a-hash")
