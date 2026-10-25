@@ -189,6 +189,7 @@ def write_evaluation_report(
         "annotator_agreement": agreements,
         "limitations": [
             "Agreement measures consistency, not correctness.",
+            "The on-target share describes only manually selected crosshair-on/off-target frames; it is not aim accuracy or representative gameplay performance.",
             "No automatic detector was trained or scored by this report.",
             "Recording-level leakage checks cover the named datasets supplied.",
         ],
