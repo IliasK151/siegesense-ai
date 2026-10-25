@@ -105,3 +105,27 @@ def test_motion_analysis_reports_shifted_synthetic_frames(tmp_path: Path) -> Non
     assert len(saved["pairs"]) == 1
     with pytest.raises(ValueError, match="cannot overwrite"):
         write_motion_report(report, manifest)
+
+
+
+def test_motion_analysis_skips_mismatched_frame_dimensions(tmp_path: Path) -> None:
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    first = np.zeros((100, 100), dtype=np.uint8)
+    second = np.zeros((100, 140), dtype=np.uint8)
+    assert cv2.imwrite(str(tmp_path / "frame_000.png"), first)
+    assert cv2.imwrite(str(tmp_path / "frame_100.png"), second)
+    manifest = _write_manifest(
+        tmp_path,
+        frames=[
+            {"timestamp_ms": 0, "filename": "frame_000.png"},
+            {"timestamp_ms": 100, "filename": "frame_100.png"},
+        ],
+    )
+
+    report = analyze_manifest_motion(manifest, cv2_module=cv2)
+
+    assert report.eligible_pair_count == 1
+    assert report.analyzed_pair_count == 0
+    assert report.unusable_pair_count == 1
+    assert report.median_motion_px_per_sample is None
