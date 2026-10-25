@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
         content_host.setLayout(content_column)
         root_layout.addWidget(content_host, 1)
         self.setCentralWidget(root)
+        self._refresh_overview()
 
     def _build_page(self, name: str, description: str) -> QWidget:
         page = QWidget()
@@ -212,36 +213,57 @@ class MainWindow(QMainWindow):
         elif name == "Overview":
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
-            metrics.addWidget(metric_card("Sessions reviewed", "—", "No real sessions recorded"))
-            metrics.addWidget(metric_card("Observations", "—", "No observations recorded"))
-            metrics.addWidget(metric_card("Active experiments", "—", "No settings experiments"))
-            metrics.addWidget(metric_card("Trend confidence", "—", "Requires validated data"))
+            self._overview_metric_values: dict[str, QLabel] = {}
+            metric_specs = (
+                ("sessions", "Sessions", "Real sessions saved locally"),
+                ("observations", "Observations", "Timestamped notes from reviews"),
+                ("experiments", "Active experiments", "Planned or running tests"),
+                ("recordings", "Recorded videos", "Sessions linked to local footage"),
+            )
+            for key, label, hint in metric_specs:
+                card = metric_card(label, "0", hint)
+                value_label = card.findChild(QLabel, "MetricValue")
+                if value_label is not None:
+                    self._overview_metric_values[key] = value_label
+                metrics.addWidget(card)
             page_layout.addLayout(metrics)
 
             body_row = QHBoxLayout()
             body_row.setSpacing(14)
-            trend_panel = panel(
-                "Performance over time",
-                "Your trend chart will appear after real sessions are reviewed. "
-                "Demo examples are intentionally not plotted as personal progress.",
+            self.overview_activity_panel = QFrame()
+            self.overview_activity_panel.setObjectName("Panel")
+            activity_layout = QVBoxLayout(self.overview_activity_panel)
+            activity_layout.setContentsMargins(18, 16, 18, 18)
+            activity_layout.setSpacing(10)
+            activity_layout.addWidget(QLabel("Recent review activity"))
+            self.overview_activity_list = QListWidget()
+            self.overview_activity_list.setMinimumHeight(210)
+            activity_layout.addWidget(self.overview_activity_list)
+            self.overview_activity_note = QLabel(
+                "Activity is based on your saved local sessions and manual observations, not automated gameplay analysis."
             )
-            trend_panel.setMinimumHeight(210)
-            priorities_panel = panel(
-                "Coaching priorities",
-                "No priorities yet. Add a session and timestamped observations to build "
-                "an evidence-backed review.",
-            )
-            priorities_panel.setMinimumWidth(250)
-            body_row.addWidget(trend_panel, 2)
+            self.overview_activity_note.setObjectName("Muted")
+            self.overview_activity_note.setWordWrap(True)
+            activity_layout.addWidget(self.overview_activity_note)
+
+            priorities_panel = QFrame()
+            priorities_panel.setObjectName("Panel")
+            priorities_layout = QVBoxLayout(priorities_panel)
+            priorities_layout.setContentsMargins(18, 16, 18, 18)
+            priorities_layout.setSpacing(10)
+            priorities_layout.addWidget(QLabel("Review focus"))
+            self.overview_priority_list = QListWidget()
+            self.overview_priority_list.setMinimumHeight(210)
+            priorities_layout.addWidget(self.overview_priority_list)
+            body_row.addWidget(self.overview_activity_panel, 2)
             body_row.addWidget(priorities_panel, 1)
             page_layout.addLayout(body_row)
 
             page_layout.addWidget(
                 panel(
-                    "Start with a real session",
-                    "Choose a recorded match, add observations at meaningful timestamps, "
-                    "then test one settings variable at a time. This early shell does not "
-                    "yet analyse gameplay automatically.",
+                    "Recommended workflow",
+                    "Review a recorded match, log timestamped observations, and change one settings variable at a time. "
+                    "Counts and review-focus summaries reflect saved notes only; they are not AI diagnoses or proof of improvement.",
                 )
             )
         else:
@@ -269,6 +291,69 @@ class MainWindow(QMainWindow):
 
         page_layout.addStretch(1)
         return page
+
+    def _refresh_overview(self) -> None:
+        """Refresh overview counts and review focus from real local records only."""
+        if not hasattr(self, "_overview_metric_values"):
+            return
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+            experiments = self.settings_service.list_experiments() if self.settings_service else []
+            observations_by_session = {
+                session.id: self.session_service.list_observations(session.id)
+                for session in sessions
+            } if self.session_service else {}
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            for value in self._overview_metric_values.values():
+                value.setText("—")
+            self.overview_activity_list.clear()
+            self.overview_activity_list.addItem(f"Local data could not be loaded: {error}")
+            self.overview_priority_list.clear()
+            self.overview_priority_list.addItem("Review focus unavailable until storage is accessible.")
+            return
+
+        observation_count = sum(len(items) for items in observations_by_session.values())
+        active_experiments = sum(item.status in {"planned", "running"} for item in experiments)
+        counts = {
+            "sessions": len(sessions),
+            "observations": observation_count,
+            "experiments": active_experiments,
+            "recordings": sum(bool(session.media_path) for session in sessions),
+        }
+        for key, value in counts.items():
+            if key in self._overview_metric_values:
+                self._overview_metric_values[key].setText(str(value))
+
+        self.overview_activity_list.clear()
+        if not sessions:
+            self.overview_activity_list.addItem("No sessions saved yet. Start in Session Review.")
+        else:
+            for session in sessions[:6]:
+                note_count = len(observations_by_session.get(session.id, []))
+                recording_label = "video linked" if session.media_path else "notes only"
+                self.overview_activity_list.addItem(
+                    f"{session.title}  ·  {note_count} observations  ·  {recording_label}"
+                )
+
+        self.overview_priority_list.clear()
+        category_counts: dict[str, int] = {}
+        for items in observations_by_session.values():
+            for observation in items:
+                category_counts[observation.kind.value] = category_counts.get(observation.kind.value, 0) + 1
+        if not category_counts:
+            self.overview_priority_list.addItem(
+                "No review focus yet. Add timestamped observations in Session Review."
+            )
+        else:
+            ordered = sorted(category_counts.items(), key=lambda item: (-item[1], item[0]))
+            for category, count in ordered:
+                noun = "observation" if count == 1 else "observations"
+                self.overview_priority_list.addItem(
+                    f"{category.title()}  ·  {count} {noun} logged"
+                )
+            self.overview_priority_list.addItem(
+                "These are your most frequently logged categories, not an automated assessment of mistakes."
+            )
 
     def _build_session_review(self, page_layout: QVBoxLayout) -> None:
         """Build the first functional session and timestamped-observation workflow."""
@@ -448,6 +533,7 @@ class MainWindow(QMainWindow):
             return
         self._refresh_settings_data(select_snapshot_id=snapshot.id)
         self.settings_status.setText("Settings snapshot saved locally.")
+        self._refresh_overview()
 
     def _refresh_settings_data(self, *, select_snapshot_id: str | None = None) -> None:
         if not hasattr(self, "experiment_baseline_combo"):
@@ -503,6 +589,7 @@ class MainWindow(QMainWindow):
             return
         self._refresh_settings_data()
         self.settings_status.setText(f"Experiment recorded locally: {experiment.title}")
+        self._refresh_overview()
 
     def _browse_session_media(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -531,6 +618,7 @@ class MainWindow(QMainWindow):
         self.session_media_input.clear()
         self._refresh_review_sessions(select_id=session.id)
         self.review_status.setText("Session saved locally.")
+        self._refresh_overview()
 
     def _refresh_review_sessions(self, *, select_id: str | None = None) -> None:
         if not hasattr(self, "review_session_combo"):
@@ -659,6 +747,7 @@ class MainWindow(QMainWindow):
         self.observation_text.clear()
         self._refresh_observations()
         self.review_status.setText("Observation saved locally.")
+        self._refresh_overview()
 
     def show_page(self, name: str) -> None:
         """Select a page and keep the active navigation state in sync."""
