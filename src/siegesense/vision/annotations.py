@@ -9,6 +9,7 @@ import json
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
+import math
 from pathlib import Path
 
 ANNOTATION_SCHEMA_VERSION = 1
@@ -32,6 +33,12 @@ class FrameAnnotation:
     note: str
     annotator: str
     created_at: str
+    # Optional normalized coordinates in [0, 1], relative to the full source frame.
+    # These are human-marked points, not automatic detections.
+    reticle_x: float | None = None
+    reticle_y: float | None = None
+    target_x: float | None = None
+    target_y: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,12 +105,27 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
         if isinstance(annotation.timestamp_ms, bool) or not isinstance(annotation.timestamp_ms, int):
             raise ValueError("Annotation timestamp must be an integer")
         _validate_annotation_fields(annotation.timestamp_ms, annotation.label, annotation.annotator)
+        _validate_point(annotation.reticle_x, annotation.reticle_y, "reticle")
+        _validate_point(annotation.target_x, annotation.target_y, "target")
     return AnnotationDataset(
         schema_version=payload["schema_version"],
         source_sha256=source_sha256,
         manifest_path=manifest_path,
         annotations=annotations,
     )
+
+
+def _validate_point(x: float | None, y: float | None, name: str) -> None:
+    """Validate an optional normalized point; coordinates must be supplied as a pair."""
+    if x is None and y is None:
+        return
+    if x is None or y is None:
+        raise ValueError(f"{name.capitalize()} coordinates require both x and y")
+    for axis, value in (("x", x), ("y", y)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name.capitalize()} {axis} coordinate must be a number")
+        if not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(f"{name.capitalize()} {axis} coordinate must be between 0 and 1")
 
 
 def _validate_annotation_fields(timestamp_ms: int, label: str, annotator: str) -> None:
@@ -152,8 +174,14 @@ class AnnotationStore:
         *,
         annotator: str,
         note: str = "",
+        reticle_x: float | None = None,
+        reticle_y: float | None = None,
+        target_x: float | None = None,
+        target_y: float | None = None,
     ) -> FrameAnnotation:
         _validate_annotation_fields(timestamp_ms, label, annotator)
+        _validate_point(reticle_x, reticle_y, "reticle")
+        _validate_point(target_x, target_y, "target")
         self._validate_frame(timestamp_ms, frame_filename)
         annotation = FrameAnnotation(
             annotation_id=str(uuid.uuid4()),
@@ -163,6 +191,10 @@ class AnnotationStore:
             note=note.strip(),
             annotator=annotator.strip(),
             created_at=datetime.now(timezone.utc).isoformat(),
+            reticle_x=reticle_x,
+            reticle_y=reticle_y,
+            target_x=target_x,
+            target_y=target_y,
         )
         self._annotations[annotation.annotation_id] = annotation
         self.save()
