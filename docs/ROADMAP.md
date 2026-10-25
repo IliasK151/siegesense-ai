@@ -53,7 +53,8 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 Current baseline: the desktop app now supports local recorded-session review, timestamped manual notes, local settings snapshots, experiment outcomes, overview counts, and transparent rules-based review prompts. It does not yet perform computer-vision analysis or claim to be a trained AI coach.
 
 - [ ] Define measurable vision use cases and ground truth
-- [ ] Build offline analysis prototypes and benchmark them
+- [x] Build an initial offline frame-sampling utility with manifest and tests
+- [ ] Build annotation UI and benchmark against real recordings
 - [ ] Display method, units, confidence, and limitations
 - [ ] Add capabilities only after validation
 
