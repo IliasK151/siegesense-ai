@@ -110,7 +110,16 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
 
     database = Database(":memory:")
     service = SessionService(database)
-    session = service.create_session("Link test session", duration_ms=5000)
+    session = service.create_session(
+        "Link test session",
+        duration_ms=5000,
+        media_path=str(tmp_path / "link-clip.mp4"),
+    )
+    mismatched_session = service.create_session(
+        "Different recording",
+        duration_ms=5000,
+        media_path=str(tmp_path / "different-clip.mp4"),
+    )
     window = MainWindow(session_service=service)
     try:
         window.show_page("Clip Annotation")
@@ -145,6 +154,13 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
         window._link_annotation_to_session()
         assert len(service.list_observations(session.id)) == 1
         assert "already linked" in window.annotation_status.text().lower()
+
+        window.annotation_session_combo.setCurrentIndex(
+            window.annotation_session_combo.findData(mismatched_session.id)
+        )
+        window._link_annotation_to_session()
+        assert service.list_observations(mismatched_session.id) == []
+        assert "does not match" in window.annotation_status.text().lower()
     finally:
         window.close()
         database.close()
