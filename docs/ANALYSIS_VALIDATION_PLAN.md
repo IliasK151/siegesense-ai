@@ -47,3 +47,8 @@ The optional utility at src/siegesense/vision/frame_sampling.py samples a user-s
 ## Implemented annotation data layer
 
 `src/siegesense/vision/annotations.py` now provides a local annotation store keyed to a sampling manifest's source SHA-256. Supported human labels are target transition, crosshair on/off target, movement start/stop, ambiguous, and unusable frame. An annotation must reference an exact sampled frame from the manifest. JSON datasets are schema-versioned and saved via a temporary file followed by replacement. Loading against a different source fingerprint is rejected. This is a data layer only; a graphical annotation UI is still pending.
+
+
+## Annotation workspace
+
+The desktop shell now includes a Clip Annotation page. It opens a local `sampling_manifest.json`, lists sampled frames, previews the selected image, and saves a manual label plus annotator and optional note to `annotations.json` beside the manifest. The page validates frame filenames as local basenames and uses the annotation service's source-fingerprint checks. A UI integration test exercises loading a generated frame and persisting a label. No automatic image interpretation is performed.
