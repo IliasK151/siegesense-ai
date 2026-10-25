@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ANNOTATION_SCHEMA_VERSION = 1
+_UNSET_COORDINATE = object()
 ALLOWED_LABELS = frozenset({
     "target_transition",
     "crosshair_on_target",
@@ -207,17 +208,41 @@ class AnnotationStore:
         label: str,
         annotator: str,
         note: str = "",
+        reticle_x: float | None | object = _UNSET_COORDINATE,
+        reticle_y: float | None | object = _UNSET_COORDINATE,
+        target_x: float | None | object = _UNSET_COORDINATE,
+        target_y: float | None | object = _UNSET_COORDINATE,
     ) -> FrameAnnotation:
-        """Update a saved annotation's label and notes without changing its frame."""
+        """Update annotation metadata and optionally its complete set of spatial points.
+
+        Omitting all coordinate arguments preserves existing points. Supplying all four
+        (including explicit None values) replaces or clears them as a single operation.
+        """
         existing = self._annotations.get(annotation_id)
         if existing is None:
             raise ValueError("Annotation does not exist")
         _validate_annotation_fields(existing.timestamp_ms, label, annotator)
+        coordinates = (reticle_x, reticle_y, target_x, target_y)
+        coordinates_provided = any(
+            coordinate is not _UNSET_COORDINATE for coordinate in coordinates
+        )
+        if coordinates_provided:
+            if any(coordinate is _UNSET_COORDINATE for coordinate in coordinates):
+                raise ValueError("Supply all four spatial coordinate fields together")
+            _validate_point(reticle_x, reticle_y, "reticle")
+            _validate_point(target_x, target_y, "target")
+        else:
+            reticle_x, reticle_y = existing.reticle_x, existing.reticle_y
+            target_x, target_y = existing.target_x, existing.target_y
         updated = replace(
             existing,
             label=label,
             annotator=annotator.strip(),
             note=note.strip(),
+            reticle_x=reticle_x,
+            reticle_y=reticle_y,
+            target_x=target_x,
+            target_y=target_y,
         )
         self._annotations[annotation_id] = updated
         self.save()
