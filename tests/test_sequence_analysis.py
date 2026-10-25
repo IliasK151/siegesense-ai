@@ -56,6 +56,8 @@ def test_sequence_summary_measures_only_contiguous_labelled_runs(tmp_path: Path)
     assert summary.on_target_runs.longest_observed_span_ms == 0
     assert summary.movement_start_count == 1
     assert summary.movement_stop_count == 1
+    assert summary.off_to_on_transitions == 1
+    assert summary.on_to_off_transitions == 1
     assert any("not precise event duration" in item for item in summary.limitations)
 
 
@@ -69,6 +71,8 @@ def test_sequence_summary_without_interval_does_not_invent_timing(tmp_path: Path
     assert summary.off_target_runs.run_count is None
     assert summary.off_target_runs.median_observed_span_ms is None
     assert summary.off_target_runs.longest_observed_span_ms is None
+    assert summary.off_to_on_transitions is None
+    assert summary.on_to_off_transitions is None
     assert any("timing is unavailable" in item for item in summary.limitations)
 
 
