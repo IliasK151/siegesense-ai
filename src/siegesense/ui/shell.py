@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from siegesense.domain.models import ObservationKind
 from siegesense.services.session_service import SessionService
+from siegesense.services.export_service import render_session_summary
 from siegesense.services.settings_service import SettingsService
 
 NAV_ITEMS = [
@@ -596,6 +597,9 @@ class MainWindow(QMainWindow):
         self.review_status = QLabel("Observations are saved locally. Demo records are excluded.")
         self.review_status.setObjectName("Muted")
         review_layout.addWidget(self.review_status)
+        export_button = QPushButton("Export session summary…")
+        export_button.clicked.connect(self._export_session_summary)
+        review_layout.addWidget(export_button, 0, Qt.AlignmentFlag.AlignLeft)
         page_layout.addWidget(review_panel, 1)
         self._refresh_review_sessions()
 
@@ -800,6 +804,37 @@ class MainWindow(QMainWindow):
         self._refresh_settings_data()
         self.settings_status.setText(f"Experiment recorded locally: {experiment.title}")
         self._refresh_overview()
+
+    def _export_session_summary(self) -> None:
+        """Export the selected session and its manual notes to a Markdown file."""
+        session_id = self.review_session_combo.currentData() if hasattr(self, "review_session_combo") else None
+        if not session_id or self.session_service is None:
+            QMessageBox.information(self, "Select a session", "Create or select a session before exporting.")
+            return
+        try:
+            sessions = self.session_service.list_sessions()
+            session = next((item for item in sessions if item.id == session_id), None)
+            if session is None:
+                raise ValueError("The selected session is no longer available.")
+            observations = self.session_service.list_observations(session.id)
+            content = render_session_summary(session, observations)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            QMessageBox.warning(self, "Could not prepare export", f"No export was created.\\n\\n{error}")
+            return
+        target, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export session summary",
+            "session-summary.md",
+            "Markdown files (*.md)",
+        )
+        if not target:
+            return
+        try:
+            Path(target).write_text(content, encoding="utf-8")
+        except OSError as error:
+            QMessageBox.warning(self, "Could not write export", f"The summary was not saved.\\n\\n{error}")
+            return
+        self.review_status.setText(f"Session summary exported to {target}")
 
     def _browse_session_media(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
