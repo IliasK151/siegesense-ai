@@ -169,9 +169,9 @@ class MainWindow(QMainWindow):
         self.breadcrumb.setObjectName("Muted")
         topbar.addWidget(self.breadcrumb)
         topbar.addStretch(1)
-        demo_badge = QLabel("LOCAL DATA · DEMO RECORDS HIDDEN")
-        demo_badge.setObjectName("StatusPill")
-        topbar.addWidget(demo_badge)
+        self.data_mode_badge = QLabel("LOCAL DATA · DEMO RECORDS HIDDEN")
+        self.data_mode_badge.setObjectName("StatusPill")
+        topbar.addWidget(self.data_mode_badge)
         content_column.addLayout(topbar)
 
         self.page_stack = QStackedWidget()
