@@ -59,6 +59,7 @@ Current baseline: the desktop app now supports local recorded-session review, ti
 - [x] Document annotation labels and ambiguity-handling protocol
 - [x] Add dataset label-coverage and recording-level leakage checks
 - [x] Add reviewer agreement summaries and local JSON report export
+- [x] Include a descriptive summary of manually labelled aim frames, with selection-bias caveats
 - [ ] Benchmark annotation workflow and sampling against real recordings
 - [ ] Display method, units, confidence, and limitations
 - [ ] Add capabilities only after validation
