@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from siegesense.services.session_service import SessionService
+
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -71,8 +73,9 @@ def metric_card(label: str, value: str, hint: str) -> QFrame:
 class MainWindow(QMainWindow):
     """Main application window and navigation host."""
 
-    def __init__(self) -> None:
+    def __init__(self, session_service: SessionService | None = None) -> None:
         super().__init__()
+        self.session_service = session_service
         self.setWindowTitle("SiegeSense AI")
         self.resize(1320, 850)
         self.setMinimumSize(960, 640)
