@@ -1,10 +1,15 @@
 """Tests for Markdown session-summary exports."""
 
-from siegesense.domain.models import Observation, ObservationKind, Session
-from siegesense.services.export_service import render_session_csv, render_session_json, render_session_summary
 import csv
 import io
 import json
+
+from siegesense.domain.models import Observation, ObservationKind, Session
+from siegesense.services.export_service import (
+    render_session_csv,
+    render_session_json,
+    render_session_summary,
+)
 
 
 def test_summary_contains_manual_notes_in_timestamp_order() -> None:
