@@ -1,7 +1,7 @@
 """Launch SiegeSense AI."""
 
-from siegesense.app import main
+from siegesense import app
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app.main())
