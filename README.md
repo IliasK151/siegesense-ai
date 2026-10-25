@@ -40,7 +40,7 @@ See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md),
 
 ## Windows preview package
 
-A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow), or by pushing a version tag. The workflow runs tests and lint before packaging. The artifact is a preview, not a validated aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
+A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow), or by pushing a version tag. The workflow runs tests and lint before packaging, then launches the packaged executable in an offscreen smoke-test mode to verify that the bundled UI, navigation, and local database initialize. This is not a substitute for installing it on a separate clean Windows machine or checking real-video codecs. The artifact is a preview, not a validated aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
 
 ## Development setup
 
