@@ -86,3 +86,6 @@ SiegeSense AI is a coaching and review tool, not a gameplay automation tool. It 
 ## License
 
 No license has been selected yet. Until one is added, all rights are reserved by default.
+
+
+The manual sequence summary also counts adjacent off-target→on-target and on-target→off-target label transitions when the sampling interval is known. These are counts of consecutive reviewed labels only; gaps, missing labels, and unknown intervals are not inferred, and the counts are not validated aim-correction metrics.
