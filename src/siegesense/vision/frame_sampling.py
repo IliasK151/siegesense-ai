@@ -71,6 +71,13 @@ def sample_video_frames(
         raise ValueError("Output directory cannot be inside the source file path")
     if destination.exists() and any(destination.iterdir()):
         raise ValueError("Output directory must be empty to avoid overwriting previous samples")
+    for name, value in (("start_ms", start_ms), ("interval_ms", interval_ms)):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{name} must be an integer number of milliseconds")
+    if end_ms is not None and (
+        isinstance(end_ms, bool) or not isinstance(end_ms, int)
+    ):
+        raise ValueError("end_ms must be an integer number of milliseconds")
     if start_ms < 0:
         raise ValueError("Start time must be zero or greater")
     if interval_ms <= 0:
