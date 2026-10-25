@@ -214,6 +214,28 @@ def test_report_cli_writes_report_for_named_dataset(tmp_path: Path, capsys) -> N
     assert json.loads(output.read_text(encoding="utf-8"))["datasets"][0]["dataset_name"] == "heldout"
 
 
+def test_report_cli_includes_reviewer_pair(tmp_path: Path, capsys) -> None:
+    first = make_dataset(
+        tmp_path / "reviewer-a.json", "same-source",
+        ["target_transition", "crosshair_on_target"],
+    )
+    second = make_dataset(
+        tmp_path / "reviewer-b.json", "same-source",
+        ["target_transition", "crosshair_off_target"],
+    )
+    output = tmp_path / "report.json"
+    result = report_main([
+        "--dataset", f"heldout={first}",
+        "--agreement", f"double_review={first},{second}",
+        "--output", str(output),
+    ])
+    assert result == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["annotator_agreement"][0]["name"] == "double_review"
+    assert report["annotator_agreement"][0]["overlapping_frames"] == 2
+    assert "Evaluation report written" in capsys.readouterr().out
+
+
 def test_report_cli_requires_a_dataset(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as error:
         report_main(["--output", str(tmp_path / "report.json")])
