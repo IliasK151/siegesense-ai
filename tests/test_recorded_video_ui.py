@@ -25,7 +25,7 @@ def test_existing_local_recording_is_loaded_into_player(app: QApplication, tmp_p
     window = MainWindow(session_service=service)
     try:
         assert window.review_session_combo.currentData() == session.id
-        assert window.review_media_player.source().toLocalFile() == str(recording.resolve())
+        assert Path(window.review_media_player.source().toLocalFile()) == recording.resolve()
         assert "Loaded local recording" in window.review_media_status.text()
     finally:
         window.close()
