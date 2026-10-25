@@ -67,8 +67,8 @@ def test_sequence_summary_without_interval_does_not_invent_timing(tmp_path: Path
     summary = summarize_annotated_sequences(dataset)
     assert summary.sampling_interval_ms is None
     assert summary.off_target_runs.run_count == 1
-    assert summary.off_target_runs.median_observed_span_ms == 0
-    assert summary.off_target_runs.longest_observed_span_ms == 0
+    assert summary.off_target_runs.median_observed_span_ms is None
+    assert summary.off_target_runs.longest_observed_span_ms is None
     assert any("timing is unavailable" in item for item in summary.limitations)
 
 
