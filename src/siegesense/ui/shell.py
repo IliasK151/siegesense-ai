@@ -86,10 +86,14 @@ def metric_card(label: str, value: str, hint: str) -> QFrame:
 class MainWindow(QMainWindow):
     """Main application window and navigation host."""
 
-    def __init__(self, session_service: SessionService | None = None) -> None:
+    def __init__(
+        self,
+        session_service: SessionService | None = None,
+        settings_service: SettingsService | None = None,
+    ) -> None:
         super().__init__()
         self.session_service = session_service
-        self.settings_service = SettingsService(session_service._database) if session_service is not None else None
+        self.settings_service = settings_service
         self.setWindowTitle("SiegeSense AI")
         self.resize(1320, 850)
         self.setMinimumSize(960, 640)
