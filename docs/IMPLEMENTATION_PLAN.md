@@ -8,20 +8,22 @@ The target is a local-first Rainbow Six Siege review and coaching desktop app th
 
 ## Slice 1 — Release and startup reliability
 
-**Status: implementation added; latest CI verification pending.**
+**Status: CI/package smoke gate passing; external clean-machine verification remains open.**
 
 - [x] Add a startup smoke-test mode that initializes Qt, the navigation shell, and the local database without entering the normal event loop.
 - [x] Run the packaged Windows executable in offscreen smoke-test mode during the Windows package workflow.
 - [x] Capture a traceback to a temporary diagnostic file when the packaged smoke test fails, so windowed builds can be debugged without a console.
 - [x] Add a source-entry-point subprocess smoke test.
 - [x] Document what the package smoke test proves and what it does not prove.
-- [ ] Confirm latest quality checks and Windows package workflow pass on the same commit.
+- [x] Confirm latest quality checks and Windows package workflow pass on the same commit. (Commit `58b96ee`; tests/lint pass on Python 3.10–3.12 and packaged smoke test passes.)
 - [ ] Install and launch the artifact on a separate clean Windows machine without Python installed.
 - [ ] Verify representative real video files and codecs.
 
 **Exit criteria:** CI tests/lint pass, package is built, packaged executable smoke test passes, and a human confirms clean-machine launch and media playback.
 
 ## Slice 2 — Recording and timestamp integrity
+
+**Status: in progress.** The current sampler derives manifest timestamps from the requested seek grid and frame indices from nominal FPS; it does not independently verify actual decoded-frame timestamps. This limitation must remain explicit until measured against real media and a trusted reference.
 
 - Audit frame sampling against actual media timestamps, including constant-frame-rate and variable-frame-rate clips.
 - Add tests for timestamp accuracy, duplicate/near-duplicate timestamps, rotation/orientation metadata, unreadable files, and interrupted sampling.
