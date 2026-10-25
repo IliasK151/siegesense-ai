@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QSlider,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -295,6 +298,41 @@ class MainWindow(QMainWindow):
         create_layout.addWidget(create_button, 0, Qt.AlignmentFlag.AlignLeft)
         page_layout.addWidget(create_panel)
 
+        media_panel = QFrame()
+        media_panel.setObjectName("Panel")
+        media_layout = QVBoxLayout(media_panel)
+        media_layout.setContentsMargins(18, 16, 18, 18)
+        media_layout.setSpacing(10)
+        media_layout.addWidget(QLabel("Recorded match playback"))
+        self.review_video_widget = QVideoWidget()
+        self.review_video_widget.setMinimumHeight(180)
+        self.review_video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        media_layout.addWidget(self.review_video_widget, 1)
+        self.review_media_player = QMediaPlayer(self)
+        self.review_audio_output = QAudioOutput(self)
+        self.review_media_player.setAudioOutput(self.review_audio_output)
+        self.review_media_player.setVideoOutput(self.review_video_widget)
+        controls = QHBoxLayout()
+        self.review_play_button = QPushButton("Play")
+        self.review_play_button.clicked.connect(self._toggle_review_playback)
+        controls.addWidget(self.review_play_button)
+        self.review_seek_slider = QSlider(Qt.Orientation.Horizontal)
+        self.review_seek_slider.setRange(0, 0)
+        self.review_seek_slider.sliderMoved.connect(self.review_media_player.setPosition)
+        controls.addWidget(self.review_seek_slider, 1)
+        self.review_media_time = QLabel("00:00 / 00:00")
+        controls.addWidget(self.review_media_time)
+        media_layout.addLayout(controls)
+        self.review_media_status = QLabel("Select a session with a local recording to play it here.")
+        self.review_media_status.setObjectName("Muted")
+        self.review_media_status.setWordWrap(True)
+        media_layout.addWidget(self.review_media_status)
+        self.review_media_player.positionChanged.connect(self._update_media_position)
+        self.review_media_player.durationChanged.connect(self._update_media_duration)
+        self.review_media_player.playbackStateChanged.connect(self._update_play_button)
+        self.review_media_player.errorOccurred.connect(self._on_media_error)
+        page_layout.addWidget(media_panel, 1)
+
         review_panel = QFrame()
         review_panel.setObjectName("Panel")
         review_layout = QVBoxLayout(review_panel)
@@ -302,7 +340,7 @@ class MainWindow(QMainWindow):
         review_layout.setSpacing(12)
         review_layout.addWidget(QLabel("Timestamped observations"))
         self.review_session_combo = QComboBox()
-        self.review_session_combo.currentIndexChanged.connect(self._refresh_observations)
+        self.review_session_combo.currentIndexChanged.connect(self._on_review_session_changed)
         review_layout.addWidget(self.review_session_combo)
         observation_form = QFormLayout()
         self.observation_timestamp = QSpinBox()
