@@ -25,10 +25,11 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 **Migration blocker:** the original MVP source and its JSON schema are not currently in the repository. Do not implement an importer until the real source/schema is available and can be backed up and tested.
 
 ## Phase 3 — Session review
-- [ ] Recorded-video playback
+- [ ] Verify end-to-end playback with representative real video files/codecs
+- [x] Playback controls, seeking, and local file selection UI
 - [x] Timestamped observations and notes with categories
 - [x] Stable local persistence for session and observation records
-- [ ] Graceful media errors and file validation
+- [x] Missing recording paths are detected and reported
 - [ ] Tags and exportable session summary
 
 ## Phase 4 — Settings Lab and coaching
