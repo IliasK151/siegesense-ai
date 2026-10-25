@@ -9,7 +9,8 @@ The desktop app has usable local workflows for session notes, settings snapshots
 ## Engineering checks
 
 - [ ] CI tests and lint pass on Python 3.10, 3.11, and 3.12 on Windows.
-- [ ] The Windows packaging workflow completes from a clean runner and produces a downloadable artifact.
+- [x] The Windows packaging workflow builds on a clean GitHub Actions runner and now runs an offscreen packaged-app smoke test before publishing the preview artifact.
+- [ ] Install and launch the packaged app on a separate clean Windows machine with no Python environment installed.
 - [ ] Install and launch the packaged app on a clean Windows machine with no Python environment installed.
 - [ ] Verify supported video playback with representative recordings and codecs.
 - [ ] Verify database creation, restart persistence, and error messaging when the local data directory is unavailable.
