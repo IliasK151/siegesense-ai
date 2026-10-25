@@ -848,14 +848,20 @@ class MainWindow(QMainWindow):
             # OpenCV can raise its own exception type for damaged or unsupported images.
             self.annotation_status.setText(f"Screen-space motion analysis failed: {error}")
             return
+        pair_summary = (
+            f"Analyzed {report.analyzed_pair_count}/{report.eligible_pair_count} eligible pairs; "
+            f"subsampled: {report.subsampled_pair_count}; "
+            f"unusable: {report.unusable_pair_count}; "
+            f"timestamp-gap pairs excluded: {report.skipped_gap_pair_count}."
+        )
         if report.median_motion_px_per_sample is None:
-            motion_summary = "No usable adjacent frame pairs were available."
+            motion_summary = f"No usable adjacent frame pairs were available. {pair_summary}"
         else:
             motion_summary = (
                 f"Median visible-feature motion: {report.median_motion_px_per_sample:.2f} "
                 f"resized px/sample; 90th percentile: {report.p90_motion_px_per_sample:.2f}. "
                 f"Median per-pair coherent-feature ratio: "
-                f"{_median_coherent_ratio(report.pairs):.0%}."
+                f"{_median_coherent_ratio(report.pairs):.0%}. {pair_summary}"
             )
         self.annotation_status.setText(
             f"Motion report saved to {output}. {motion_summary} "
