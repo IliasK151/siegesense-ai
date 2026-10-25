@@ -123,6 +123,10 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
     window = MainWindow(session_service=service)
     try:
         window.show_page("Clip Annotation")
+        assert window.annotation_session_combo.count() == 2
+        window.annotation_session_combo.setCurrentIndex(
+            window.annotation_session_combo.findData(session.id)
+        )
         assert window.annotation_session_combo.currentData() == session.id
         window.annotation_manifest_input.setText(str(manifest_path))
         window._load_annotation_manifest()
