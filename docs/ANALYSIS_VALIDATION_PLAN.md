@@ -57,3 +57,8 @@ The desktop shell now includes a Clip Annotation page. It opens a local `samplin
 ## Linking manual annotations to session review
 
 The Clip Annotation page can attach a selected saved annotation to a real local Session Review session as a timestamped observation. The observation includes the annotation label, optional note, source frame filename, and tags (`clip-annotation`, the label, and a stable annotation ID tag). Linking checks the target session for that stable tag first and blocks duplicate links to the same session. Movement-start/stop labels are categorized as movement; other labels are categorized as aim. This is a user-initiated copy into the session observation store; the annotation dataset remains the source annotation record. No automatic model prediction is implied.
+
+
+### Recording identity guard
+
+When a Session Review session has a recording path and the loaded sampling manifest includes a source path, annotation linking compares their resolved local paths. If they point to different files, linking is blocked with a visible explanation. This is a conservative local-path check, not cryptographic proof that two files with different paths contain different video or that two matching paths have unchanged contents. Sessions without a stored media path remain linkable; future work may persist and compare a source fingerprint for stronger provenance.
