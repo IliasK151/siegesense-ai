@@ -32,7 +32,7 @@ The current shell includes navigation and placeholder states for all destination
 - Windows-first desktop application
 - Python 3.10–3.12
 - PySide6
-- Local persistence planned; schema and migration work tracked in GitHub Issues
+- Local SQLite schema and session/settings storage APIs are implemented on the feature branch; UI integration and safe migration remain in progress
 - Automated tests and CI checks
 
 See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), and [decisions](docs/DECISIONS.md).
