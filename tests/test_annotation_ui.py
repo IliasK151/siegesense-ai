@@ -1,5 +1,6 @@
 """Integration tests for the graphical local clip annotation workflow."""
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -86,6 +87,52 @@ def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, 
         assert "deleted" in window.annotation_status.text().lower()
         assert "on target: 0" in window.annotation_summary_label.text()
         assert "off target: 0" in window.annotation_summary_label.text()
+    finally:
+        window.close()
+
+
+def test_annotation_workspace_samples_local_recording(
+    app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "gameplay.mp4"
+    source.write_bytes(b"test recording")
+    output = tmp_path / "sampled-frames"
+
+    def fake_sample_video_frames(source_path, output_dir, *, interval_ms):
+        destination = Path(output_dir)
+        destination.mkdir(parents=True)
+        frame_name = "frame_000000000ms.png"
+        frame = QPixmap(320, 180)
+        frame.fill(Qt.GlobalColor.darkCyan)
+        assert frame.save(str(destination / frame_name))
+        (destination / "sampling_manifest.json").write_text(json.dumps({
+            "schema_version": 1,
+            "source_path": str(source_path),
+            "source_sha256": "fake-sampling-fingerprint",
+            "source_fps": 30.0,
+            "source_width": 320,
+            "source_height": 180,
+            "duration_ms": 1000,
+            "start_ms": 0,
+            "end_ms": 1000,
+            "interval_ms": interval_ms,
+            "frames": [{"timestamp_ms": 0, "frame_index": 0, "filename": frame_name}],
+        }), encoding="utf-8")
+        return SimpleNamespace(
+            frames=(SimpleNamespace(timestamp_ms=0, filename=frame_name),),
+            interval_ms=interval_ms,
+        )
+
+    monkeypatch.setattr("siegesense.ui.shell.sample_video_frames", fake_sample_video_frames)
+    window = MainWindow()
+    try:
+        window.annotation_video_input.setText(str(source))
+        window.annotation_output_input.setText(str(output))
+        window.annotation_interval_spin.setValue(150)
+        window._sample_annotation_video()
+        assert window.annotation_frame_list.count() == 1
+        assert "Sampled 1 frame(s) at 150 ms intervals" in window.annotation_status.text()
+        assert window.annotation_manifest_input.text() == str(output / "sampling_manifest.json")
     finally:
         window.close()
 
