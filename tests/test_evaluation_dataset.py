@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from siegesense.vision.evaluation import compare_annotators, summarize_datasets
+from siegesense.vision.evaluation import (
+    compare_annotators,
+    summarize_datasets,
+    write_evaluation_report,
+)
 
 
 def make_dataset(path: Path, source_hash: str, labels: list[str]) -> Path:
@@ -91,3 +95,47 @@ def test_compare_annotators_rejects_no_overlapping_frames(tmp_path: Path) -> Non
     second = make_dataset(tmp_path / "b.json", "same-source", [])
     with pytest.raises(ValueError, match="no overlapping"):
         compare_annotators(first, second)
+
+
+
+def test_write_evaluation_report_includes_coverage_and_limitations(tmp_path: Path) -> None:
+    dataset = make_dataset(
+        tmp_path / "labels.json", "source-a",
+        ["target_transition", "ambiguous"],
+    )
+    report_path = write_evaluation_report(
+        tmp_path / "report.json", [("training", dataset)]
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
+    assert report["model_performance_evaluated"] is False
+    assert report["datasets"][0]["annotation_count"] == 2
+    assert report["datasets"][0]["label_counts"]["crosshair_on_target"] == 0
+    assert report["limitations"]
+
+
+def test_write_evaluation_report_does_not_overwrite_input(tmp_path: Path) -> None:
+    dataset = make_dataset(tmp_path / "labels.json", "source-a", ["ambiguous"])
+    original = dataset.read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="must not overwrite"):
+        write_evaluation_report(dataset, [("training", dataset)])
+    assert dataset.read_text(encoding="utf-8") == original
+
+
+def test_write_evaluation_report_includes_reviewer_agreement(tmp_path: Path) -> None:
+    first = make_dataset(
+        tmp_path / "a.json", "same-source",
+        ["target_transition", "crosshair_on_target", "movement_start", "ambiguous"],
+    )
+    second = make_dataset(
+        tmp_path / "b.json", "same-source",
+        ["target_transition", "crosshair_on_target", "movement_stop", "ambiguous"],
+    )
+    report_path = write_evaluation_report(
+        tmp_path / "report.json",
+        [("training", first)],
+        annotator_pairs=[("double-reviewed subset", first, second)],
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["annotator_agreement"][0]["overlapping_frames"] == 4
+    assert report["annotator_agreement"][0]["exact_agreement"] == 3
