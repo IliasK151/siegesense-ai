@@ -62,6 +62,17 @@ def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, 
         assert "Saved" in window.annotation_status.text()
 
         window.annotation_history_list.setCurrentRow(0)
+        window.annotation_label_combo.setCurrentIndex(
+            window.annotation_label_combo.findData("crosshair_on_target")
+        )
+        window.annotation_note_input.setText("corrected after replay")
+        window._update_selected_annotation()
+        edited = json.loads(dataset_path.read_text(encoding="utf-8"))["annotations"][0]
+        assert edited["label"] == "crosshair_on_target"
+        assert edited["note"] == "corrected after replay"
+        assert "Updated" in window.annotation_status.text()
+
+        window.annotation_history_list.setCurrentRow(0)
         window._delete_selected_annotation()
         assert window.annotation_history_list.count() == 0
         assert json.loads(dataset_path.read_text(encoding="utf-8"))["annotations"] == []
