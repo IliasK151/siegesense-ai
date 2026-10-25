@@ -36,7 +36,11 @@ Overview, Session Review, and Settings Lab have initial functional workflows. Ai
 - Safe migration from the original MVP remains blocked until its source and JSON schema are available
 - Automated tests and CI checks
 
-See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), and [decisions](docs/DECISIONS.md).
+See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), [decisions](docs/DECISIONS.md), and the [release-readiness gate](docs/RELEASE_READINESS.md).
+
+## Windows preview package
+
+A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow), or by pushing a version tag. The workflow runs tests and lint before packaging. The artifact is a preview, not a validated aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
 
 ## Development setup
 
