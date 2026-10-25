@@ -12,7 +12,8 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 - [x] Initial shared theme tokens and basic shell
 - [x] All planned page destinations represented in the shell
 - [x] Reusable panels, metric cards, and initial functional page implementations
-- [ ] Compact collapsible navigation, responsive layouts, and keyboard support
+- [x] Compact collapsible navigation with tooltips
+- [ ] Responsive layouts and keyboard accessibility audit
 - [x] Demo/real record separation in persistence and UI tests
 
 ## Phase 2 — Domain and persistence
