@@ -37,3 +37,8 @@ Each proposed metric needs a written definition, unit, sampling rate, input requ
 ## Non-goals
 
 No game-memory reading, anti-cheat bypass, automated gameplay inputs, or covert capture. Any live capture requires separate platform/fair-play and privacy review.
+
+
+## Implemented first prototype: offline frame sampling
+
+The optional utility at src/siegesense/vision/frame_sampling.py samples a user-selected local recording into a separate, empty output directory and writes a versioned JSON manifest with source SHA-256, source FPS/resolution/duration, sampling range, interval, frame indices, and timestamps. Install the optional dependency with pip install -e ".[vision]". This is a sampling foundation only; it does not detect targets, crosshair position, movement, or skill. Validate it against representative recordings before using outputs for quantitative claims.
