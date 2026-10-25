@@ -30,7 +30,8 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 - [x] Timestamped observations and notes with categories
 - [x] Stable local persistence for session and observation records
 - [x] Missing recording paths are detected and reported
-- [ ] Tags and exportable session summary
+- [x] Exportable Markdown session summary
+- [ ] Tags on observations and exportable structured data
 
 ## Phase 4 — Settings Lab and coaching
 - [x] Baseline settings snapshots
