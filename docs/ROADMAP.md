@@ -60,6 +60,7 @@ Current baseline: the desktop app now supports local recorded-session review, ti
 - [x] Add dataset label-coverage and recording-level leakage checks
 - [x] Add reviewer agreement summaries and local JSON report export
 - [x] Include a descriptive summary of manually labelled aim frames, with selection-bias caveats
+- [x] Summarize consecutive human-labelled on/off-target frame runs when sampling interval is known, with tests and duration caveats
 - [ ] Benchmark annotation workflow and sampling against real recordings
 - [ ] Display method, units, confidence, and limitations
 - [ ] Add capabilities only after validation
