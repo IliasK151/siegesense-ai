@@ -38,3 +38,38 @@ def test_session_review_exports_selected_session(app: QApplication, tmp_path: Pa
     finally:
         window.close()
         database.close()
+
+
+
+@pytest.mark.parametrize(
+    ("suffix", "selected_filter", "expected"),
+    [
+        (".json", "Structured JSON (*.json)", '"timestamp_ms": 83000'),
+        (".csv", "Observation CSV (*.csv)", "83000,01:23,aim"),
+    ],
+)
+def test_session_review_exports_structured_formats(
+    app: QApplication, tmp_path: Path, monkeypatch, suffix: str, selected_filter: str, expected: str
+) -> None:
+    database = Database(":memory:")
+    service = SessionService(database)
+    session = service.create_session("Structured export")
+    service.add_observation(
+        session.id, 83_000, "Overshot during target switch",
+        kind=ObservationKind.AIM, tags=("overshoot", "acog"),
+    )
+    target = tmp_path / f"review{suffix}"
+    monkeypatch.setattr(
+        "siegesense.ui.shell.QFileDialog.getSaveFileName",
+        lambda *args: (str(target), selected_filter),
+    )
+    window = MainWindow(session_service=service)
+    try:
+        window._export_session_summary()
+        content = target.read_text(encoding="utf-8")
+        assert expected in content
+        assert "overshoot" in content
+        assert str(target) in window.review_status.text()
+    finally:
+        window.close()
+        database.close()
