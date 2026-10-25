@@ -52,3 +52,8 @@ The optional utility at src/siegesense/vision/frame_sampling.py samples a user-s
 ## Annotation workspace
 
 The desktop shell now includes a Clip Annotation page. It opens a local `sampling_manifest.json`, lists sampled frames, previews the selected image, and saves a manual label plus annotator and optional note to `annotations.json` beside the manifest. Saved annotations can be selected, edited, and deleted through the UI. Editing preserves the annotation ID and frame reference while updating the label, annotator, and note. The page validates frame filenames as local basenames and uses the annotation service's source-fingerprint checks. A UI integration test exercises loading a generated frame and persisting a label. No automatic image interpretation is performed.
+
+
+## Linking manual annotations to session review
+
+The Clip Annotation page can attach a selected saved annotation to a real local Session Review session as a timestamped observation. The observation includes the annotation label, optional note, source frame filename, and tags (`clip-annotation` plus the label). Movement-start/stop labels are categorized as movement; other labels are categorized as aim. This is a user-initiated copy into the session observation store; the annotation dataset remains the source annotation record. No automatic model prediction is implied.
