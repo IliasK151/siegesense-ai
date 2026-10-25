@@ -67,3 +67,8 @@ When a Session Review session has a recording path and the loaded sampling manif
 ## Opening linked frames from Session Review
 
 Session Review includes an explicit action for the selected observation. For observations tagged with a stable `annotation-id:` value, the app looks for that annotation in the currently loaded local annotation dataset and locates the frame by timestamp and filename. If the dataset or frame is not loaded, the app directs the user to load the matching sampling manifest rather than guessing. Ordinary observations without annotation IDs remain unaffected.
+
+
+## Session recording provenance
+
+Session records support an optional SHA-256 fingerprint for their linked media. Fingerprinting is explicit and chunked through `SessionService.fingerprint_session_media`, so importing or creating a session does not unexpectedly hash a large video on the UI thread. The database migrates older local stores to schema version 2 without discarding session data. When both a session and annotation manifest have fingerprints, linking requires an exact match; when either fingerprint is unavailable, the UI falls back to the existing conservative resolved-path check. A matching hash is stronger evidence of file identity than a path, while path-only matching is not proof that file contents are unchanged.
