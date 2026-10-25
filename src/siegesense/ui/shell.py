@@ -345,7 +345,7 @@ class MainWindow(QMainWindow):
                 title, media_path=self.session_media_input.text().strip() or None
             )
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
-            QMessageBox.critical(self, "Could not save session", f"Your session was not saved.\\n\\n{error}")
+            QMessageBox.critical(self, "Could not save session", f"Your session was not saved.\n\n{error}")
             return
         self.session_title_input.clear()
         self.session_media_input.clear()
@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
                 session_id, self.observation_timestamp.value() * 1000, text, kind=kind
             )
         except (OSError, ValueError, RuntimeError) as error:
-            QMessageBox.warning(self, "Could not save observation", f"Your observation was not saved.\\n\\n{error}")
+            QMessageBox.warning(self, "Could not save observation", f"Your observation was not saved.\n\n{error}")
             return
         self.observation_text.clear()
         self._refresh_observations()
