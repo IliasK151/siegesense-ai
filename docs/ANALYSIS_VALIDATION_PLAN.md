@@ -125,3 +125,10 @@ The coherent-feature ratio is the fraction of tracked features whose displacemen
 ### Manual label-transition counts
 
 The sequence summary counts adjacent `crosshair_off_target`→`crosshair_on_target` and reverse transitions only when two annotated timestamps are exactly one known sampling interval apart. Timestamp gaps break adjacency; unknown intervals produce unavailable counts. These are descriptive counts of human labels, not automatic correction detection or aim-quality scores.
+
+
+## Manual reticle-to-target geometry prototype
+
+The annotation data layer now supports optional normalized reticle and target points (each x/y pair ranges from 0 to 1 relative to the full frame). `src/siegesense/vision/spatial_analysis.py` summarizes target-minus-reticle horizontal and vertical offsets as percentages of frame width/height, plus Euclidean distance as a percentage of the frame diagonal. It excludes frames without both points and reports explicit limitations.
+
+These points are manually supplied and are not yet captured by the graphical workspace. This prototype does not detect reticles or opponents and cannot determine overshoot/undershoot from a still frame. A follow-up UI slice must provide a reliable way to mark points, preserve aspect ratio while mapping clicks back to source-frame coordinates, and visualize the measured offsets before this can be useful in normal player workflow. Validate coordinate marking agreement before using the numbers for coaching.
