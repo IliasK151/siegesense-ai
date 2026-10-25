@@ -26,13 +26,15 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 
 ## Phase 3 — Session review
 - [ ] Recorded-video playback
-- [ ] Timestamped observations, tags, and notes
-- [ ] Stable persistence and graceful media errors
-- [ ] Exportable session summary
+- [x] Timestamped observations and notes with categories
+- [x] Stable local persistence for session and observation records
+- [ ] Graceful media errors and file validation
+- [ ] Tags and exportable session summary
 
 ## Phase 4 — Settings Lab and coaching
-- [ ] Baseline settings snapshots
-- [ ] One-variable-at-a-time experiment workflow
+- [x] Baseline settings snapshots
+- [x] Record an experiment with explicit baseline/test snapshots and changed variable
+- [ ] Experiment outcome capture and comparison views
 - [ ] Evidence-linked coaching notes with uncertainty
 - [ ] Compare experiments without overstating causality
 
