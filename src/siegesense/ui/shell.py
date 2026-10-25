@@ -39,7 +39,7 @@ from siegesense.services.export_service import (
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
-from siegesense.vision.evaluation import summarize_aim_frames
+from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
 
 NAV_ITEMS = [
@@ -785,6 +785,9 @@ class MainWindow(QMainWindow):
         self.annotation_summary_label.setObjectName("Muted")
         self.annotation_summary_label.setWordWrap(True)
         history_layout.addWidget(self.annotation_summary_label)
+        export_report_button = QPushButton("Export local evaluation report…")
+        export_report_button.clicked.connect(self._export_annotation_report)
+        history_layout.addWidget(export_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
         self.annotation_history_list.currentItemChanged.connect(self._on_annotation_history_selected)
@@ -1093,6 +1096,36 @@ class MainWindow(QMainWindow):
         self._refresh_annotation_summary()
         self.annotation_status.setText(
             f"Saved {annotation.label.replace('_', ' ')} at {annotation.timestamp_ms} ms."
+        )
+
+    def _export_annotation_report(self) -> None:
+        """Export a local coverage report for the currently loaded annotation dataset."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_status.setText(
+                "Save at least one annotation before exporting an evaluation report."
+            )
+            return
+        default_path = store.dataset_path.parent / "evaluation-report.json"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export local evaluation report",
+            str(default_path),
+            "JSON report (*.json)",
+        )
+        if not output_path:
+            return
+        try:
+            written = write_evaluation_report(
+                output_path,
+                [(store.dataset_path.stem, store.dataset_path)],
+            )
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_status.setText(f"Report export failed: {error}")
+            return
+        self.annotation_status.setText(
+            f"Local evaluation report exported to {written}. "
+            "It summarizes human labels and does not measure model performance."
         )
 
     def _refresh_annotation_summary(self) -> None:
