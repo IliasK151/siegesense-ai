@@ -65,7 +65,7 @@ ruff check .
 
 ## Review a gameplay recording locally
 
-The annotation labels remain manual. The optional screen-space motion report estimates visible feature movement between adjacent sampled frames, but does not detect targets or measure aim automatically. The annotation data layer also supports optional human-marked reticle/target coordinates and descriptive spatial-offset summaries in JSON evaluation reports; the click-to-mark UI is still pending, so these coordinate fields are not yet part of the normal desktop workflow.
+The annotation labels remain manual. The optional screen-space motion report estimates visible feature movement between adjacent sampled frames, but does not detect targets or measure aim automatically. The annotation workflow now supports optional click-to-mark reticle/target coordinates on a frame preview, normalized against the full source image even when the preview is letterboxed. It displays descriptive spatial offsets in the UI and JSON evaluation report; these are human-marked geometric measurements, not automatic detections or aim-accuracy scores.
 
 1. Launch SiegeSense AI and open **Clip Annotation**.
 2. Choose **Select gameplay video** and select a local recording. Choose an output folder (or use the suggested `<video-name>_frames` folder).
