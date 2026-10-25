@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
         self.breadcrumb.setObjectName("Muted")
         topbar.addWidget(self.breadcrumb)
         topbar.addStretch(1)
-        demo_badge = QLabel("DEMO MODE · NO REAL PERFORMANCE DATA")
+        demo_badge = QLabel("LOCAL DATA · DEMO RECORDS HIDDEN")
         demo_badge.setObjectName("StatusPill")
         topbar.addWidget(demo_badge)
         content_column.addLayout(topbar)
