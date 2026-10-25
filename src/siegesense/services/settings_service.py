@@ -50,6 +50,19 @@ class SettingsService:
         self._database.add_experiment(experiment)
         return experiment
 
+    def update_experiment(
+        self,
+        experiment_id: str,
+        *,
+        status: str,
+        outcome: str | None = None,
+        notes: str | None = None,
+    ) -> SettingsExperiment:
+        """Record an experiment's current status and observed outcome."""
+        return self._database.update_experiment(
+            experiment_id, status=status, outcome=outcome, notes=notes
+        )
+
     def list_snapshots(self, *, include_demo: bool = False) -> list[SettingsSnapshot]:
         return self._database.list_settings_snapshots(include_demo=include_demo)
 
