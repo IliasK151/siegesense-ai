@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -184,7 +192,9 @@ class MainWindow(QMainWindow):
         page_layout.addWidget(title)
         page_layout.addWidget(subtitle)
 
-        if name == "Overview":
+        if name == "Session Review":
+            self._build_session_review(page_layout)
+        elif name == "Overview":
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
             metrics.addWidget(metric_card("Sessions reviewed", "—", "No real sessions recorded"))
@@ -244,6 +254,169 @@ class MainWindow(QMainWindow):
 
         page_layout.addStretch(1)
         return page
+
+    def _build_session_review(self, page_layout: QVBoxLayout) -> None:
+        """Build the first functional session and timestamped-observation workflow."""
+        create_panel = QFrame()
+        create_panel.setObjectName("Panel")
+        create_layout = QVBoxLayout(create_panel)
+        create_layout.setContentsMargins(18, 16, 18, 18)
+        create_layout.setSpacing(12)
+        create_layout.addWidget(QLabel("Create a review session"))
+
+        form = QFormLayout()
+        self.session_title_input = QLineEdit()
+        self.session_title_input.setPlaceholderText("e.g. Ranked — Oregon — Match 1")
+        self.session_media_input = QLineEdit()
+        self.session_media_input.setPlaceholderText("Optional local video file")
+        media_row = QHBoxLayout()
+        media_row.addWidget(self.session_media_input, 1)
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(self._browse_session_media)
+        media_row.addWidget(browse)
+        media_host = QWidget()
+        media_host.setLayout(media_row)
+        form.addRow("Session name", self.session_title_input)
+        form.addRow("Recording", media_host)
+        create_layout.addLayout(form)
+        create_button = QPushButton("Create session")
+        create_button.clicked.connect(self._create_review_session)
+        create_layout.addWidget(create_button, 0, Qt.AlignmentFlag.AlignLeft)
+        page_layout.addWidget(create_panel)
+
+        review_panel = QFrame()
+        review_panel.setObjectName("Panel")
+        review_layout = QVBoxLayout(review_panel)
+        review_layout.setContentsMargins(18, 16, 18, 18)
+        review_layout.setSpacing(12)
+        review_layout.addWidget(QLabel("Timestamped observations"))
+        self.review_session_combo = QComboBox()
+        self.review_session_combo.currentIndexChanged.connect(self._refresh_observations)
+        review_layout.addWidget(self.review_session_combo)
+        observation_form = QFormLayout()
+        self.observation_timestamp = QSpinBox()
+        self.observation_timestamp.setRange(0, 86_400)
+        self.observation_timestamp.setSuffix(" s")
+        self.observation_kind = QComboBox()
+        self.observation_kind.addItem("Aim", "aim")
+        self.observation_kind.addItem("Movement", "movement")
+        self.observation_kind.addItem("Positioning", "positioning")
+        self.observation_kind.addItem("Decision", "decision")
+        self.observation_kind.addItem("Other", "other")
+        self.observation_text = QLineEdit()
+        self.observation_text.setPlaceholderText("What happened, and what should be reviewed?")
+        observation_form.addRow("Timestamp", self.observation_timestamp)
+        observation_form.addRow("Category", self.observation_kind)
+        observation_form.addRow("Observation", self.observation_text)
+        review_layout.addLayout(observation_form)
+        add_note = QPushButton("Add observation")
+        add_note.clicked.connect(self._add_review_observation)
+        review_layout.addWidget(add_note, 0, Qt.AlignmentFlag.AlignLeft)
+        self.observation_list = QListWidget()
+        self.observation_list.setMinimumHeight(150)
+        review_layout.addWidget(self.observation_list)
+        self.review_status = QLabel("Observations are saved locally. Demo records are excluded.")
+        self.review_status.setObjectName("Muted")
+        review_layout.addWidget(self.review_status)
+        page_layout.addWidget(review_panel, 1)
+        self._refresh_review_sessions()
+
+    def _browse_session_media(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select a gameplay recording", "", "Video files (*.mp4 *.mkv *.mov *.avi);;All files (*)"
+        )
+        if path:
+            self.session_media_input.setText(path)
+
+    def _create_review_session(self) -> None:
+        if self.session_service is None:
+            QMessageBox.warning(self, "Storage unavailable", "Session storage has not been configured.")
+            return
+        title = self.session_title_input.text().strip()
+        if not title:
+            QMessageBox.information(self, "Session name required", "Enter a name for this review session.")
+            self.session_title_input.setFocus()
+            return
+        try:
+            session = self.session_service.create_session(
+                title, media_path=self.session_media_input.text().strip() or None
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            QMessageBox.critical(self, "Could not save session", f"Your session was not saved.\\n\\n{error}")
+            return
+        self.session_title_input.clear()
+        self.session_media_input.clear()
+        self._refresh_review_sessions(select_id=session.id)
+        self.review_status.setText("Session saved locally.")
+
+    def _refresh_review_sessions(self, *, select_id: str | None = None) -> None:
+        if not hasattr(self, "review_session_combo"):
+            return
+        current_id = select_id or self.review_session_combo.currentData()
+        self.review_session_combo.blockSignals(True)
+        self.review_session_combo.clear()
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+        except (OSError, RuntimeError) as error:
+            sessions = []
+            self.review_status.setText(f"Could not load sessions: {error}")
+        for session in sessions:
+            self.review_session_combo.addItem(session.title, session.id)
+        index = self.review_session_combo.findData(current_id)
+        if index >= 0:
+            self.review_session_combo.setCurrentIndex(index)
+        self.review_session_combo.blockSignals(False)
+        self._refresh_observations()
+
+    def _refresh_observations(self, *_args: object) -> None:
+        if not hasattr(self, "observation_list"):
+            return
+        self.observation_list.clear()
+        session_id = self.review_session_combo.currentData()
+        if not session_id or self.session_service is None:
+            self.observation_list.addItem("No session yet — create one above to begin.")
+            return
+        try:
+            observations = self.session_service.list_observations(session_id)
+        except (OSError, ValueError, RuntimeError) as error:
+            self.observation_list.addItem(f"Could not load observations: {error}")
+            return
+        if not observations:
+            self.observation_list.addItem("No observations yet. Add the first timestamped note above.")
+            return
+        for item in observations:
+            seconds = item.timestamp_ms // 1000
+            timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            entry = QListWidgetItem(f"{timestamp}  ·  {item.kind.value.title()}  ·  {item.text}")
+            entry.setData(Qt.ItemDataRole.UserRole, item.id)
+            self.observation_list.addItem(entry)
+
+    def _add_review_observation(self) -> None:
+        if self.session_service is None:
+            QMessageBox.warning(self, "Storage unavailable", "Session storage has not been configured.")
+            return
+        session_id = self.review_session_combo.currentData()
+        text = self.observation_text.text().strip()
+        if not session_id:
+            QMessageBox.information(self, "Select a session", "Create or select a session first.")
+            return
+        if not text:
+            QMessageBox.information(self, "Observation required", "Enter a short observation before saving.")
+            self.observation_text.setFocus()
+            return
+        try:
+            from siegesense.domain.models import ObservationKind
+
+            kind = ObservationKind(self.observation_kind.currentData())
+            self.session_service.add_observation(
+                session_id, self.observation_timestamp.value() * 1000, text, kind=kind
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            QMessageBox.warning(self, "Could not save observation", f"Your observation was not saved.\\n\\n{error}")
+            return
+        self.observation_text.clear()
+        self._refresh_observations()
+        self.review_status.setText("Observation saved locally.")
 
     def show_page(self, name: str) -> None:
         """Select a page and keep the active navigation state in sync."""
