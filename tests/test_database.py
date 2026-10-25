@@ -2,8 +2,15 @@
 
 import pytest
 
-from siegesense.domain.models import MetricResult, Observation, ObservationKind, Session, SettingsExperiment, SettingsSnapshot
-from siegesense.storage.database import Database, SCHEMA_VERSION
+from siegesense.domain.models import (
+    MetricResult,
+    Observation,
+    ObservationKind,
+    Session,
+    SettingsExperiment,
+    SettingsSnapshot,
+)
+from siegesense.storage.database import SCHEMA_VERSION, Database
 
 
 @pytest.fixture
