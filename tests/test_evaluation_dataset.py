@@ -84,6 +84,19 @@ def test_compare_annotators_reports_exact_agreement_and_kappa(tmp_path: Path) ->
     assert report.cohens_kappa < 1.0
 
 
+def test_compare_annotators_rejects_duplicate_frame_labels(tmp_path: Path) -> None:
+    first = make_dataset(
+        tmp_path / "a.json", "same-source", ["ambiguous", "target_transition"]
+    )
+    payload = json.loads(first.read_text(encoding="utf-8"))
+    payload["annotations"][1]["timestamp_ms"] = payload["annotations"][0]["timestamp_ms"]
+    payload["annotations"][1]["frame_filename"] = payload["annotations"][0]["frame_filename"]
+    first.write_text(json.dumps(payload), encoding="utf-8")
+    second = make_dataset(tmp_path / "b.json", "same-source", ["ambiguous"])
+    with pytest.raises(ValueError, match="duplicate annotations"):
+        compare_annotators(first, second)
+
+
 def test_compare_annotators_rejects_different_recordings(tmp_path: Path) -> None:
     first = make_dataset(tmp_path / "a.json", "source-a", ["ambiguous"])
     second = make_dataset(tmp_path / "b.json", "source-b", ["ambiguous"])
