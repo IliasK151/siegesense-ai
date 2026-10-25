@@ -1,9 +1,5 @@
 """Smoke tests for the initial desktop shell."""
 
-import os
-
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 from PySide6.QtWidgets import QApplication
 
 from siegesense.ui.shell import NAV_ITEMS, MainWindow
