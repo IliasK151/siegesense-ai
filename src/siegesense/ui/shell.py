@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from siegesense.domain.models import ObservationKind
 from siegesense.services.session_service import SessionService
 
 NAV_ITEMS = [
@@ -341,7 +344,7 @@ class MainWindow(QMainWindow):
             session = self.session_service.create_session(
                 title, media_path=self.session_media_input.text().strip() or None
             )
-        except (OSError, ValueError, RuntimeError) as error:
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             QMessageBox.critical(self, "Could not save session", f"Your session was not saved.\\n\\n{error}")
             return
         self.session_title_input.clear()
@@ -357,7 +360,7 @@ class MainWindow(QMainWindow):
         self.review_session_combo.clear()
         try:
             sessions = self.session_service.list_sessions() if self.session_service else []
-        except (OSError, RuntimeError) as error:
+        except (OSError, RuntimeError, sqlite3.Error) as error:
             sessions = []
             self.review_status.setText(f"Could not load sessions: {error}")
         for session in sessions:
@@ -405,8 +408,6 @@ class MainWindow(QMainWindow):
             self.observation_text.setFocus()
             return
         try:
-            from siegesense.domain.models import ObservationKind
-
             kind = ObservationKind(self.observation_kind.currentData())
             self.session_service.add_observation(
                 session_id, self.observation_timestamp.value() * 1000, text, kind=kind
