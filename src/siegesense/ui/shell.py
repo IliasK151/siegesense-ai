@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from statistics import median
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
@@ -54,6 +55,11 @@ NAV_ITEMS = [
     ("AI Coach", "✳", "Evidence-linked coaching, when available"),
     ("Preferences & Privacy", "☷", "Capture, data, and application preferences"),
 ]
+
+
+def _median_coherent_ratio(pairs: tuple) -> float:
+    """Return the median descriptive coherence ratio for analyzed frame pairs."""
+    return median(pair.coherent_feature_ratio for pair in pairs)
 
 
 def panel(title: str, body: str, *, object_name: str = "Panel") -> QFrame:
