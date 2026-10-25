@@ -31,6 +31,17 @@ This guide defines manual labels for sampled frames from user-owned Rainbow Six 
 5. Resolve disagreements only after the independent labels have been saved. Preserve the original datasets for auditability.
 6. Keep all frames from one source recording in a single train, tuning, or evaluation split. Do not randomly split adjacent frames across splits.
 
+## Optional spatial point marks
+
+The Clip Annotation frame preview can store two optional points for a labelled frame:
+
+- **Reticle:** mark the center of the visible reticle/crosshair.
+- **Target:** mark one consistent visual reference point on the visible opponent. For consistency, use the same convention across the dataset (for example, the center of the visible torso); do not imply this is an exact game hitbox.
+
+Choose **Mark reticle** or **Mark target**, then click inside the displayed image. The surrounding letterboxed margins are not clickable. Coordinates are normalized to the full source frame, so resizing the preview does not change the underlying point location. Point marks are stored with the current annotation and can be edited or cleared.
+
+The spatial report calculates target-minus-reticle horizontal offset as a percentage of frame width, vertical offset as a percentage of frame height, and straight-line separation as a percentage of the frame diagonal. Positive horizontal offset means the marked target point is to the right of the reticle; positive vertical offset means it is below the reticle. These calculations describe only the points selected by a human reviewer. They do not detect targets, establish a hitbox, infer mouse movement, diagnose overshoot from one frame, or predict hit probability.
+
 ## Limits and reporting
 
 - Report the number of recordings, labelled frames, and count for every label, including zero-count labels.
