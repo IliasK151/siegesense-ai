@@ -64,13 +64,42 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("schema_version") != ANNOTATION_SCHEMA_VERSION:
         raise ValueError("Unsupported annotation dataset schema version")
-    annotations = tuple(FrameAnnotation(**item) for item in payload.get("annotations", []))
+    source_sha256 = payload.get("source_sha256")
+    manifest_path = payload.get("manifest_path")
+    raw_annotations = payload.get("annotations", [])
+    if not isinstance(source_sha256, str) or not source_sha256.strip():
+        raise ValueError("Annotation dataset is missing its source fingerprint")
+    if not isinstance(manifest_path, str) or not manifest_path.strip():
+        raise ValueError("Annotation dataset is missing its manifest path")
+    if not isinstance(raw_annotations, list):
+        raise ValueError("Annotation dataset annotations must be a list")
+
+    annotations = tuple(FrameAnnotation(**item) for item in raw_annotations)
+    seen_ids: set[str] = set()
     for annotation in annotations:
+        if not isinstance(annotation.annotation_id, str) or not annotation.annotation_id.strip():
+            raise ValueError("Annotation ID cannot be empty")
+        if annotation.annotation_id in seen_ids:
+            raise ValueError(f"Duplicate annotation ID: {annotation.annotation_id}")
+        seen_ids.add(annotation.annotation_id)
+        if (
+            not isinstance(annotation.frame_filename, str)
+            or not annotation.frame_filename.strip()
+            or Path(annotation.frame_filename).name != annotation.frame_filename
+            or Path(annotation.frame_filename).is_absolute()
+        ):
+            raise ValueError("Annotation frame filename must be a local basename")
+        if not isinstance(annotation.note, str):
+            raise ValueError("Annotation note must be text")
+        if not isinstance(annotation.created_at, str) or not annotation.created_at.strip():
+            raise ValueError("Annotation creation timestamp cannot be empty")
+        if isinstance(annotation.timestamp_ms, bool) or not isinstance(annotation.timestamp_ms, int):
+            raise ValueError("Annotation timestamp must be an integer")
         _validate_annotation_fields(annotation.timestamp_ms, annotation.label, annotation.annotator)
     return AnnotationDataset(
         schema_version=payload["schema_version"],
-        source_sha256=payload["source_sha256"],
-        manifest_path=payload["manifest_path"],
+        source_sha256=source_sha256,
+        manifest_path=manifest_path,
         annotations=annotations,
     )
 
