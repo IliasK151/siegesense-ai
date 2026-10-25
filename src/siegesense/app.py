@@ -8,6 +8,7 @@ import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from siegesense.services.session_service import SessionService
+from siegesense.services.settings_service import SettingsService
 from siegesense.storage.database import Database
 from siegesense.ui.shell import MainWindow
 from siegesense.ui.theme import APP_STYLESHEET
@@ -34,6 +35,9 @@ def main() -> int:
 
     app.aboutToQuit.connect(database.close)
     session_service = SessionService(database)
-    window = MainWindow(session_service=session_service)
+    window = MainWindow(
+        session_service=session_service,
+        settings_service=SettingsService(database),
+    )
     window.show()
     return app.exec()
