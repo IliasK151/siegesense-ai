@@ -51,6 +51,15 @@ def test_settings_lab_saves_snapshots_and_records_experiment(app: QApplication) 
         comparison = window.settings_comparison_label.text()
         assert "Horizontal: 6 → 5" in comparison
         assert "1 setting(s) differ" in comparison
+
+        window.experiment_status_combo.setCurrentIndex(
+            window.experiment_status_combo.findData("completed")
+        )
+        window.experiment_outcome_input.setText("Slightly easier to stop on target in two review clips")
+        window._update_selected_experiment()
+        assert "1 completed" in window.experiment_history_summary.text()
+        assert "Slightly easier to stop on target" in window.experiment_history_summary.text()
+        assert "not proof" in window.experiment_history_summary.text()
     finally:
         window.close()
         database.close()
