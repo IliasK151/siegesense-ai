@@ -629,6 +629,9 @@ class MainWindow(QMainWindow):
         self.observation_list.setMinimumHeight(150)
         self.observation_list.itemDoubleClicked.connect(self._seek_to_selected_observation)
         review_layout.addWidget(self.observation_list)
+        self.open_annotation_button = QPushButton("Open linked annotation frame")
+        self.open_annotation_button.clicked.connect(self._open_linked_annotation_frame)
+        review_layout.addWidget(self.open_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.review_status = QLabel("Observations are saved locally. Demo records are excluded.")
         self.review_status.setObjectName("Muted")
         review_layout.addWidget(self.review_status)
@@ -1548,6 +1551,68 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "review_media_player"):
             return
         self.observation_timestamp.setValue(self.review_media_player.position() // 1000)
+
+    def _open_linked_annotation_frame(self) -> None:
+        """Open the sampled frame referenced by the selected clip annotation observation."""
+        item = self.observation_list.currentItem()
+        session_id = self.review_session_combo.currentData()
+        observation_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if not session_id or not observation_id or self.session_service is None:
+            self.review_status.setText("Select a saved observation first.")
+            return
+        try:
+            observations = self.session_service.list_observations(session_id)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.review_status.setText(f"Could not load the selected observation: {error}")
+            return
+        observation = next((entry for entry in observations if entry.id == observation_id), None)
+        if observation is None:
+            self.review_status.setText("The selected observation is no longer available.")
+            self._refresh_observations()
+            return
+        annotation_id = next(
+            (tag.removeprefix("annotation-id:") for tag in observation.tags
+             if tag.startswith("annotation-id:")),
+            None,
+        )
+        if not annotation_id:
+            self.review_status.setText("This observation is not linked to a clip annotation.")
+            return
+        if self._annotation_store is None:
+            self.review_status.setText(
+                "Load the matching sampling manifest in Clip Annotation first, then retry."
+            )
+            self.show_page("Clip Annotation")
+            return
+        annotation = next(
+            (entry for entry in self._annotation_store.annotations
+             if entry.annotation_id == annotation_id),
+            None,
+        )
+        if annotation is None:
+            self.review_status.setText(
+                "The linked annotation isn't in the currently loaded dataset. Load its matching manifest."
+            )
+            self.show_page("Clip Annotation")
+            return
+        target_row = next(
+            (
+                row for row in range(self.annotation_frame_list.count())
+                if self.annotation_frame_list.item(row).data(Qt.ItemDataRole.UserRole)
+                == (annotation.timestamp_ms, annotation.frame_filename)
+            ),
+            None,
+        )
+        if target_row is None:
+            self.review_status.setText("The linked frame is not present in the currently loaded manifest.")
+            self.show_page("Clip Annotation")
+            return
+        self.show_page("Clip Annotation")
+        self.annotation_frame_list.setCurrentRow(target_row)
+        self.annotation_status.setText(
+            f"Opened linked annotation at {annotation.timestamp_ms / 1000:.2f}s: "
+            f"{annotation.frame_filename}."
+        )
 
     def _seek_to_selected_observation(self, item: QListWidgetItem) -> None:
         """Seek to the timestamp represented by a selected observation."""
