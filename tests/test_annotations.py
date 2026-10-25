@@ -106,3 +106,50 @@ def test_remove_persists_and_unknown_id_is_safe(tmp_path: Path) -> None:
     assert store.remove(item.annotation_id)
     assert not store.remove("not-a-real-id")
     assert AnnotationStore(manifest, dataset_path).annotations == ()
+
+
+
+def test_update_preserves_spatial_points_unless_replaced_explicitly(tmp_path: Path) -> None:
+    manifest = make_manifest(tmp_path)
+    dataset_path = tmp_path / "annotations.json"
+    store = AnnotationStore(manifest, dataset_path)
+    original = store.add(
+        0, "frame_000000000ms.png", "crosshair_off_target",
+        annotator="reviewer",
+        reticle_x=0.5, reticle_y=0.5, target_x=0.7, target_y=0.4,
+    )
+
+    edited = store.update(
+        original.annotation_id,
+        label="ambiguous",
+        annotator="reviewer 2",
+        note="label changed, coordinates should remain",
+    )
+    assert (edited.reticle_x, edited.reticle_y, edited.target_x, edited.target_y) == (
+        0.5, 0.5, 0.7, 0.4
+    )
+
+    cleared = store.update(
+        original.annotation_id,
+        label="ambiguous",
+        annotator="reviewer 2",
+        note="cleared points",
+        reticle_x=None, reticle_y=None, target_x=None, target_y=None,
+    )
+    assert (cleared.reticle_x, cleared.reticle_y, cleared.target_x, cleared.target_y) == (
+        None, None, None, None
+    )
+    assert AnnotationStore(manifest, dataset_path).annotations == (cleared,)
+
+
+def test_update_rejects_partial_coordinate_argument_sets(tmp_path: Path) -> None:
+    store = AnnotationStore(make_manifest(tmp_path), tmp_path / "annotations.json")
+    item = store.add(0, "frame_000000000ms.png", "ambiguous", annotator="reviewer")
+    with pytest.raises(ValueError, match="all four spatial coordinate fields"):
+        store.update(
+            item.annotation_id,
+            label=item.label,
+            annotator=item.annotator,
+            reticle_x=0.5,
+            reticle_y=0.5,
+        )
