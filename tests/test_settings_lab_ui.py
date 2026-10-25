@@ -77,3 +77,35 @@ def test_settings_lab_hides_demo_snapshots(app: QApplication) -> None:
     finally:
         window.close()
         database.close()
+
+
+
+def test_settings_lab_rejects_multiple_setting_changes(app: QApplication, monkeypatch) -> None:
+    database = Database(":memory:")
+    service = SettingsService(database)
+    baseline = service.save_snapshot("Baseline", {"horizontal": 6, "vertical": 6})
+    test = service.save_snapshot("Test", {"horizontal": 5, "vertical": 5})
+    window = MainWindow(settings_service=service)
+    try:
+        window.experiment_baseline_combo.setCurrentIndex(
+            window.experiment_baseline_combo.findData(baseline.id)
+        )
+        window.experiment_test_combo.setCurrentIndex(
+            window.experiment_test_combo.findData(test.id)
+        )
+        window.experiment_title_input.setText("Confounded sensitivity test")
+        window.experiment_hypothesis_input.setText("One change may help")
+        window.experiment_variable_input.setText("horizontal sensitivity")
+        messages: list[str] = []
+        monkeypatch.setattr(
+            "siegesense.ui.shell.QMessageBox.warning",
+            lambda *args: messages.append(str(args[2])),
+        )
+
+        window._create_settings_experiment()
+
+        assert service.list_experiments() == []
+        assert messages and "exactly one changed setting" in messages[0]
+    finally:
+        window.close()
+        database.close()
