@@ -298,12 +298,16 @@ def test_annotation_workspace_marks_and_updates_spatial_points(
         assert not rect.isEmpty()
 
         window.annotation_mark_reticle_button.click()
+        app.processEvents()
+        rect = picker.displayed_image_rect()
         QTest.mouseClick(
             picker, Qt.MouseButton.LeftButton,
             pos=QPoint(round(rect.x() + rect.width() * 0.3),
                        round(rect.y() + rect.height() * 0.4)),
         )
         window.annotation_mark_target_button.click()
+        app.processEvents()
+        rect = picker.displayed_image_rect()
         QTest.mouseClick(
             picker, Qt.MouseButton.LeftButton,
             pos=QPoint(round(rect.x() + rect.width() * 0.7),
