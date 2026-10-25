@@ -104,3 +104,20 @@ def test_sequence_summary_rejects_invalid_interval_and_duplicate_timestamps(
     )
     with pytest.raises(ValueError, match="unique annotation timestamps"):
         summarize_annotated_sequences(duplicate, sampling_interval_ms=100)
+
+
+
+def test_sequence_transition_counts_do_not_bridge_timestamp_gaps(tmp_path: Path) -> None:
+    dataset = make_dataset(
+        tmp_path / "gap-transitions.json",
+        [
+            (0, "crosshair_off_target"),
+            (200, "crosshair_on_target"),
+            (300, "crosshair_off_target"),
+        ],
+    )
+
+    summary = summarize_annotated_sequences(dataset, sampling_interval_ms=100)
+
+    assert summary.off_to_on_transitions == 0
+    assert summary.on_to_off_transitions == 1
