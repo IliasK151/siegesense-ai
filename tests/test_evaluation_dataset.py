@@ -169,6 +169,8 @@ def test_write_evaluation_report_includes_coverage_and_limitations(tmp_path: Pat
     assert report["datasets"][0]["annotation_count"] == 2
     assert report["datasets"][0]["label_counts"]["crosshair_on_target"] == 0
     assert report["datasets"][0]["aim_frame_summary"]["on_target_share_of_labelled_frames"] is None
+    assert report["datasets"][0]["sampled_sequence_summary"]["annotated_frame_count"] == 2
+    assert report["datasets"][0]["sampled_sequence_summary"]["sampling_interval_ms"] is None
     assert report["limitations"]
 
 
