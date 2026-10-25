@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
@@ -549,6 +550,67 @@ class MainWindow(QMainWindow):
             self.review_session_combo.setCurrentIndex(index)
         self.review_session_combo.blockSignals(False)
         self._refresh_observations()
+        self._load_review_media()
+
+    def _on_review_session_changed(self, *_args: object) -> None:
+        self._refresh_observations()
+        self._load_review_media()
+
+    def _load_review_media(self) -> None:
+        if not hasattr(self, "review_media_player"):
+            return
+        session_id = self.review_session_combo.currentData()
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+        except (OSError, RuntimeError, sqlite3.Error) as error:
+            self.review_media_status.setText(f"Could not load session recording: {error}")
+            return
+        session = next((item for item in sessions if item.id == session_id), None)
+        media_path = session.media_path if session is not None else None
+        self.review_media_player.stop()
+        if not media_path:
+            self.review_media_player.setSource(QUrl())
+            self.review_media_status.setText("This session has no recording path. You can still add timestamped observations.")
+            return
+        recording = Path(media_path).expanduser()
+        if not recording.is_file():
+            self.review_media_player.setSource(QUrl())
+            self.review_media_status.setText(f"Recording file not found: {recording}. Select an existing recording when creating a session.")
+            return
+        self.review_media_player.setSource(QUrl.fromLocalFile(str(recording.resolve())))
+        self.review_media_status.setText(f"Loaded local recording: {recording.name}")
+
+    def _toggle_review_playback(self) -> None:
+        if self.review_media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.review_media_player.pause()
+            return
+        if self.review_media_player.source().isEmpty():
+            self.review_media_status.setText("Choose a session with an existing local video file first.")
+            return
+        self.review_media_player.play()
+
+    def _update_media_position(self, position: int) -> None:
+        if not self.review_seek_slider.isSliderDown():
+            self.review_seek_slider.setValue(position)
+        self._update_media_time(position, self.review_media_player.duration())
+
+    def _update_media_duration(self, duration: int) -> None:
+        self.review_seek_slider.setRange(0, max(0, duration))
+        self._update_media_time(self.review_media_player.position(), duration)
+
+    def _update_media_time(self, position: int, duration: int) -> None:
+        def format_time(milliseconds: int) -> str:
+            seconds = max(0, milliseconds // 1000)
+            return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+        self.review_media_time.setText(f"{format_time(position)} / {format_time(duration)}")
+
+    def _update_play_button(self, state: QMediaPlayer.PlaybackState) -> None:
+        self.review_play_button.setText("Pause" if state == QMediaPlayer.PlaybackState.PlayingState else "Play")
+
+    def _on_media_error(self, _error: QMediaPlayer.Error, error_string: str) -> None:
+        if error_string:
+            self.review_media_status.setText(f"Could not play this recording: {error_string}")
 
     def _refresh_observations(self, *_args: object) -> None:
         if not hasattr(self, "observation_list"):
