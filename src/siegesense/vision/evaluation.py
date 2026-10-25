@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from siegesense.vision.annotations import ALLOWED_LABELS, load_dataset
+from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +184,7 @@ def write_evaluation_report(
             {
                 **asdict(summary),
                 "aim_frame_summary": asdict(summarize_aim_frames(path)),
+                "sampled_sequence_summary": asdict(summarize_annotated_sequences(path)),
             }
             for summary, (_, path) in zip(summaries, dataset_entries, strict=True)
         ],
