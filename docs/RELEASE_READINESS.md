@@ -14,7 +14,7 @@ The desktop app has usable local workflows for session notes, settings snapshots
 - [ ] Install and launch the packaged app on a separate clean Windows machine with no Python environment installed.
 - [ ] Verify supported video playback with representative recordings and codecs.
 - [ ] Verify database creation, restart persistence, and error messaging when the local data directory is unavailable.
-- [ ] Verify sampling on constant-frame-rate and variable-frame-rate recordings; compare exported timestamps to the media player's actual timestamps.
+- [ ] Verify sampling on constant-frame-rate and variable-frame-rate recordings; compare exported timestamps to the media player's actual timestamps. The manifest now separates requested seek-grid positions from OpenCV's reported post-read position, but neither is yet independently validated against presentation timestamps.
 - [ ] Audit keyboard navigation, scaling, minimum window size, and accessibility.
 - [ ] Review local data paths, overwrite protection, export destinations, and privacy wording.
 
