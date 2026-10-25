@@ -39,13 +39,13 @@ from siegesense.services.export_service import (
 )
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
+from siegesense.ui.point_picker import PointPickerLabel
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
 from siegesense.vision.motion_analysis import analyze_manifest_motion, write_motion_report
 from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 from siegesense.vision.spatial_analysis import summarize_spatial_error
-from siegesense.ui.point_picker import PointPickerLabel
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -1242,14 +1242,29 @@ class MainWindow(QMainWindow):
                 f"adjacent off→on labels: {sequence.off_to_on_transitions}, "
                 f"adjacent on→off labels: {sequence.on_to_off_transitions}"
             )
+        try:
+            spatial = summarize_spatial_error(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            spatial = None
+        if spatial is None or spatial.annotated_point_count == 0:
+            spatial_text = "manual reticle/target point pairs: 0"
+        else:
+            spatial_text = (
+                f"manual reticle/target point pairs: {spatial.annotated_point_count}, "
+                f"median target-minus-reticle offset: "
+                f"{spatial.median_horizontal_offset_pct:+.2f}% frame width horizontally, "
+                f"{spatial.median_vertical_offset_pct:+.2f}% frame height vertically, "
+                f"{spatial.median_distance_pct_frame_diagonal:.2f}% frame diagonal"
+            )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
             f"off target: {summary.crosshair_off_target_frames} · "
             f"selected-frame on-target share: {share_text} · "
             f"transitions: {summary.target_transition_frames} · "
             f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
-            f"{sequence_text}. "
-            "Observed sampled spans are not precise event durations. Descriptive only; "
+            f"{sequence_text}. {spatial_text}. "
+            "Observed sampled spans are not precise event durations. Spatial offsets use manually "
+            "marked points and are geometric measurements, not hit accuracy. Descriptive only; "
             "not aim accuracy or representative gameplay performance."
         )
 
