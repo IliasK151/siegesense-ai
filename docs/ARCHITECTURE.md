@@ -88,3 +88,12 @@ The initial domain/storage increment now provides:
 - Local data path resolution without creating files during module import.
 
 This is the first persistence increment, not yet a migration/import of the older JSON data. Before connecting it to the UI, add explicit backup/import tooling and additional migration-failure tests.
+
+
+## Application lifecycle and local paths
+
+The feature branch now resolves a per-user data directory without filesystem side effects during module import. The SQLite constructor creates the parent directory only when the database is opened. Windows uses Local AppData (falling back to AppData or the user's Local AppData convention); macOS uses Application Support; Linux respects XDG_DATA_HOME and otherwise uses ~/.local/share.
+
+The application bootstrap opens one database, constructs the session service, injects that service into the main window, and closes the database on application shutdown. If opening the database fails, startup shows an explicit error instead of silently continuing with an unusable persistence layer.
+
+The UI has only received the dependency-injection seam so far; session review controls are not yet wired to CRUD operations. Existing MVP data migration remains blocked on obtaining the original source/schema.
