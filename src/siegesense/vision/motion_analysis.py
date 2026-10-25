@@ -33,7 +33,7 @@ class MotionReport:
     eligible_pair_count: int
     analyzed_pair_count: int
     skipped_gap_pair_count: int
-    unreadable_pair_count: int
+    unusable_pair_count: int
     median_motion_px_per_sample: float | None
     p90_motion_px_per_sample: float | None
     pairs: tuple[MotionPair, ...]
@@ -104,12 +104,12 @@ def analyze_manifest_motion(
             ) from error
 
     results: list[MotionPair] = []
-    unreadable = 0
+    unusable = 0
     for _index, (start_ms, first_path), (end_ms, second_path) in selected:
         first = cv2_module.imread(str(first_path), cv2_module.IMREAD_GRAYSCALE)
         second = cv2_module.imread(str(second_path), cv2_module.IMREAD_GRAYSCALE)
         if first is None or second is None:
-            unreadable += 1
+            unusable += 1
             continue
         first = _resize_frame(cv2_module, first, max_dimension=640)
         second = _resize_frame(cv2_module, second, max_dimension=640)
@@ -117,19 +117,19 @@ def analyze_manifest_motion(
             first, maxCorners=300, qualityLevel=0.01, minDistance=8, blockSize=7
         )
         if features is None or len(features) < 4:
-            unreadable += 1
+            unusable += 1
             continue
         tracked, status, _error = cv2_module.calcOpticalFlowPyrLK(
             first, second, features, None
         )
         if tracked is None or status is None:
-            unreadable += 1
+            unusable += 1
             continue
         old_points = features.reshape(-1, 2)
         new_points = tracked.reshape(-1, 2)
         valid = status.reshape(-1).astype(bool)
         if int(valid.sum()) < 4:
-            unreadable += 1
+            unusable += 1
             continue
         dx = new_points[valid, 0] - old_points[valid, 0]
         dy = new_points[valid, 1] - old_points[valid, 1]
@@ -164,7 +164,7 @@ def analyze_manifest_motion(
         eligible_pair_count=len(eligible),
         analyzed_pair_count=len(results),
         skipped_gap_pair_count=gap_pairs,
-        unreadable_pair_count=unreadable,
+        unusable_pair_count=unusable,
         median_motion_px_per_sample=(
             round(float(_percentile(magnitudes, 50)), 3) if magnitudes else None
         ),
