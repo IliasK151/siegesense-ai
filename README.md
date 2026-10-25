@@ -46,11 +46,11 @@ From PowerShell on Windows:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -e ".[dev]"
+pip install -e ".[dev,vision]"
 python main.py
 ```
 
-If you prefer not to install the package in editable mode, set `PYTHONPATH=src` before launching. Editable install is the recommended path.
+If you prefer not to install the package in editable mode, set `PYTHONPATH=src` before launching. Editable install is the recommended path. The `vision` extra installs OpenCV for the local frame-sampling workflow.
 
 Run checks:
 
