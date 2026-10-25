@@ -56,6 +56,26 @@ def test_aim_frame_summary_is_descriptive_and_handles_no_crosshair_labels(
     assert summarize_aim_frames(no_crosshair).on_target_share_of_labelled_frames is None
 
 
+def test_evaluation_rejects_duplicate_annotation_ids(tmp_path: Path) -> None:
+    dataset = make_dataset(
+        tmp_path / "duplicate-id.json", "source-a", ["ambiguous", "crosshair_on_target"]
+    )
+    payload = json.loads(dataset.read_text(encoding="utf-8"))
+    payload["annotations"][1]["annotation_id"] = payload["annotations"][0]["annotation_id"]
+    dataset.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Duplicate annotation ID"):
+        summarize_datasets([("training", dataset)])
+
+
+def test_evaluation_rejects_frame_path_traversal(tmp_path: Path) -> None:
+    dataset = make_dataset(tmp_path / "unsafe-frame.json", "source-a", ["ambiguous"])
+    payload = json.loads(dataset.read_text(encoding="utf-8"))
+    payload["annotations"][0]["frame_filename"] = "../outside.png"
+    dataset.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="local basename"):
+        summarize_datasets([("training", dataset)])
+
+
 def test_summary_counts_labels_and_empty_categories(tmp_path: Path) -> None:
     dataset = make_dataset(
         tmp_path / "training.json", "source-a",
