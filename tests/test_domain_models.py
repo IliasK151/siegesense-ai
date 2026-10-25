@@ -2,7 +2,13 @@
 
 import pytest
 
-from siegesense.domain.models import MetricResult, Observation, ObservationKind, Session, SettingsExperiment
+from siegesense.domain.models import (
+    MetricResult,
+    Observation,
+    ObservationKind,
+    Session,
+    SettingsExperiment,
+)
 
 
 def test_session_rejects_negative_duration() -> None:
