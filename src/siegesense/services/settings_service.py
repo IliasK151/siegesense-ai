@@ -37,7 +37,33 @@ class SettingsService:
         notes: str = "",
         is_demo: bool = False,
     ) -> SettingsExperiment:
-        """Create an experiment linked to explicit baseline and test snapshots."""
+        """Create an experiment linked to explicit baseline and test snapshots.
+
+        When a test snapshot is supplied, require it to differ from the baseline
+        in exactly one setting. This keeps the Settings Lab's one-variable-at-a-
+        time promise enforceable rather than merely advisory.
+        """
+        if test_snapshot_id is not None:
+            baseline = self._database.get_settings_snapshot(baseline_snapshot_id)
+            test = self._database.get_settings_snapshot(test_snapshot_id)
+            if baseline is None:
+                raise ValueError("Baseline settings snapshot does not exist")
+            if test is None:
+                raise ValueError("Test settings snapshot does not exist")
+            if baseline.is_demo != is_demo or test.is_demo != is_demo:
+                raise ValueError("Experiment and snapshots must share demo provenance")
+            keys = set(baseline.values) | set(test.values)
+            changed_keys = [
+                key for key in keys
+                if baseline.values.get(key) != test.values.get(key)
+            ]
+            if not changed_keys:
+                raise ValueError("Baseline and test snapshots are identical; change one setting before recording the experiment")
+            if len(changed_keys) > 1:
+                raise ValueError(
+                    "One-variable experiments require exactly one changed setting; "
+                    f"these snapshots differ in {len(changed_keys)} settings"
+                )
         experiment = SettingsExperiment(
             title=title,
             hypothesis=hypothesis,
