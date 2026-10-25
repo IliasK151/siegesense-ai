@@ -6,6 +6,7 @@ import pytest
 
 from siegesense.vision.evaluation import (
     compare_annotators,
+    summarize_aim_frames,
     summarize_datasets,
     write_evaluation_report,
 )
@@ -31,6 +32,28 @@ def make_dataset(path: Path, source_hash: str, labels: list[str]) -> Path:
         ],
     }), encoding="utf-8")
     return path
+
+
+def test_aim_frame_summary_is_descriptive_and_handles_no_crosshair_labels(
+    tmp_path: Path,
+) -> None:
+    dataset = make_dataset(
+        tmp_path / "aim.json",
+        "source-a",
+        ["crosshair_on_target", "crosshair_on_target", "crosshair_off_target",
+         "target_transition", "ambiguous", "unusable_frame"],
+    )
+    summary = summarize_aim_frames(dataset)
+    assert summary.crosshair_on_target_frames == 2
+    assert summary.crosshair_off_target_frames == 1
+    assert summary.determinate_crosshair_frames == 3
+    assert summary.on_target_share_of_labelled_frames == pytest.approx(2 / 3)
+    assert summary.target_transition_frames == 1
+    assert summary.ambiguous_frames == 1
+    assert summary.unusable_frames == 1
+
+    no_crosshair = make_dataset(tmp_path / "empty-aim.json", "source-b", ["ambiguous"])
+    assert summarize_aim_frames(no_crosshair).on_target_share_of_labelled_frames is None
 
 
 def test_summary_counts_labels_and_empty_categories(tmp_path: Path) -> None:
@@ -125,6 +148,7 @@ def test_write_evaluation_report_includes_coverage_and_limitations(tmp_path: Pat
     assert report["model_performance_evaluated"] is False
     assert report["datasets"][0]["annotation_count"] == 2
     assert report["datasets"][0]["label_counts"]["crosshair_on_target"] == 0
+    assert report["datasets"][0]["aim_frame_summary"]["on_target_share_of_labelled_frames"] is None
     assert report["limitations"]
 
 
