@@ -43,7 +43,7 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 - [x] Experiment status and outcome capture
 - [x] Side-by-side baseline/test snapshot comparison with exact changed values
 - [x] Show changed-setting counts in experiment history
-- [ ] Compare outcomes across multiple completed experiments
+- [x] Summarise outcomes across completed/inconclusive experiments with non-causal wording
 - [x] Evidence-linked, transparent coaching prompts based on manual notes
 - [x] Aim and movement note-review pages
 - [x] Coaching prompts explicitly avoid causal claims and distinguish manual notes from automatic analysis
