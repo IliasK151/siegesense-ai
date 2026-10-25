@@ -11,9 +11,9 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 ## Phase 1 — Desktop shell and design system
 - [x] Initial shared theme tokens and basic shell
 - [x] All planned page destinations represented in the shell
-- [ ] Shared reusable components and polished page implementations
+- [x] Reusable panels, metric cards, and initial functional page implementations
 - [ ] Compact collapsible navigation, responsive layouts, and keyboard support
-- [ ] Clearly isolated demo workspace with end-to-end UI coverage
+- [x] Demo/real record separation in persistence and UI tests
 
 ## Phase 2 — Domain and persistence
 - [x] Typed session, observation, metric, settings snapshot, and experiment models
@@ -35,11 +35,16 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 ## Phase 4 — Settings Lab and coaching
 - [x] Baseline settings snapshots
 - [x] Record an experiment with explicit baseline/test snapshots and changed variable
-- [ ] Experiment outcome capture and comparison views
-- [ ] Evidence-linked coaching notes with uncertainty
-- [ ] Compare experiments without overstating causality
+- [x] Experiment status and outcome capture
+- [ ] Comparison views across multiple completed experiments
+- [x] Evidence-linked, transparent coaching prompts based on manual notes
+- [x] Aim and movement note-review pages
+- [x] Coaching prompts explicitly avoid causal claims and distinguish manual notes from automatic analysis
 
 ## Phase 5 — Validated analysis
+
+Current baseline: the desktop app now supports local recorded-session review, timestamped manual notes, local settings snapshots, experiment outcomes, overview counts, and transparent rules-based review prompts. It does not yet perform computer-vision analysis or claim to be a trained AI coach.
+
 - [ ] Define measurable vision use cases and ground truth
 - [ ] Build offline analysis prototypes and benchmark them
 - [ ] Display method, units, confidence, and limitations
