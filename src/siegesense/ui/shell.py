@@ -847,7 +847,9 @@ class MainWindow(QMainWindow):
         else:
             motion_summary = (
                 f"Median visible-feature motion: {report.median_motion_px_per_sample:.2f} "
-                f"resized px/sample; 90th percentile: {report.p90_motion_px_per_sample:.2f}."
+                f"resized px/sample; 90th percentile: {report.p90_motion_px_per_sample:.2f}. "
+                f"Median per-pair coherent-feature ratio: "
+                f"{_median_coherent_ratio(report.pairs):.0%}."
             )
         self.annotation_status.setText(
             f"Motion report saved to {output}. {motion_summary} "
