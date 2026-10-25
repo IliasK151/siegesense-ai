@@ -38,3 +38,4 @@ This guide defines manual labels for sampled frames from user-owned Rainbow Six 
 - Kappa can be undefined for degenerate label distributions. Treat that as unavailable, not as perfect agreement.
 - Agreement statistics measure consistency, not correctness. A reviewer can be consistently wrong.
 - These labels are a foundation for later validation, not proof that automatic aim or movement detection works.
+- Evaluation reports may summarize runs of consecutive manually labelled on-target/off-target frames when the sampling interval is known. These are sampled-frame spans, not precise event durations; missing or unlabelled samples break a run, and unknown intervals must not be converted into timing claims.
