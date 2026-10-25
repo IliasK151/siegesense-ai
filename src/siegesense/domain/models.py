@@ -37,8 +37,11 @@ class Session:
     notes: str = ""
     is_demo: bool = False
     created_at: str = field(default_factory=utc_now_iso)
+    media_sha256: str | None = None
 
     def __post_init__(self) -> None:
+        if self.media_sha256 is not None and (len(self.media_sha256) != 64 or any(char not in "0123456789abcdef" for char in self.media_sha256)):
+            raise ValueError("Session media SHA-256 must be 64 lowercase hexadecimal characters")
         if not self.id.strip():
             raise ValueError("Session id must not be empty")
         if not self.title.strip():
