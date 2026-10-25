@@ -39,6 +39,7 @@ from siegesense.services.export_service import (
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
+from siegesense.vision.evaluation import summarize_aim_frames
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -742,6 +743,12 @@ class MainWindow(QMainWindow):
         history_layout = QVBoxLayout(history_panel)
         history_layout.setContentsMargins(18, 14, 18, 14)
         history_layout.addWidget(QLabel("Saved annotations"))
+        self.annotation_summary_label = QLabel(
+            "Aim summary appears after you save manual labels. It describes selected frames, not aim accuracy."
+        )
+        self.annotation_summary_label.setObjectName("Muted")
+        self.annotation_summary_label.setWordWrap(True)
+        history_layout.addWidget(self.annotation_summary_label)
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
         self.annotation_history_list.currentItemChanged.connect(self._on_annotation_history_selected)
@@ -926,6 +933,7 @@ class MainWindow(QMainWindow):
             item.setData(Qt.ItemDataRole.UserRole, (timestamp, filename))
             self.annotation_frame_list.addItem(item)
         self._refresh_annotation_history()
+        self._refresh_annotation_summary()
         self.annotation_status.setText(
             f"Loaded {len(frames)} frame(s). Labels are saved locally in {dataset_path.name}."
         )
@@ -1000,8 +1008,33 @@ class MainWindow(QMainWindow):
             return
         self.annotation_note_input.clear()
         self._refresh_annotation_history()
+        self._refresh_annotation_summary()
         self.annotation_status.setText(
             f"Saved {annotation.label.replace('_', ' ')} at {annotation.timestamp_ms} ms."
+        )
+
+    def _refresh_annotation_summary(self) -> None:
+        """Show a cautious summary of manually labelled aim frames."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_summary_label.setText(
+                "No saved labels yet. This summary describes selected frames, not aim accuracy."
+            )
+            return
+        try:
+            summary = summarize_aim_frames(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_summary_label.setText(f"Aim summary unavailable: {error}")
+            return
+        share = summary.on_target_share_of_labelled_frames
+        share_text = "n/a" if share is None else f"{share:.0%}"
+        self.annotation_summary_label.setText(
+            f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
+            f"off target: {summary.crosshair_off_target_frames} · "
+            f"selected-frame on-target share: {share_text} · "
+            f"transitions: {summary.target_transition_frames} · "
+            f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
+            "Descriptive only; not aim accuracy or representative gameplay performance."
         )
 
     def _refresh_annotation_history(self) -> None:
@@ -1065,6 +1098,7 @@ class MainWindow(QMainWindow):
             self.annotation_status.setText(f"Annotation not updated: {error}")
             return
         self._refresh_annotation_history()
+        self._refresh_annotation_summary()
         for index in range(self.annotation_history_list.count()):
             history_item = self.annotation_history_list.item(index)
             if history_item.data(Qt.ItemDataRole.UserRole) == updated.annotation_id:
@@ -1088,6 +1122,7 @@ class MainWindow(QMainWindow):
             self._refresh_annotation_history()
             return
         self._refresh_annotation_history()
+        self._refresh_annotation_summary()
         self.annotation_status.setText("Annotation deleted from local storage.")
 
     def _build_settings_lab(self, page_layout: QVBoxLayout) -> None:
