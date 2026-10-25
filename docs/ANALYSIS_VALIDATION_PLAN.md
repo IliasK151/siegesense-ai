@@ -62,3 +62,8 @@ The Clip Annotation page can attach a selected saved annotation to a real local 
 ### Recording identity guard
 
 When a Session Review session has a recording path and the loaded sampling manifest includes a source path, annotation linking compares their resolved local paths. If they point to different files, linking is blocked with a visible explanation. This is a conservative local-path check, not cryptographic proof that two files with different paths contain different video or that two matching paths have unchanged contents. Sessions without a stored media path remain linkable; future work may persist and compare a source fingerprint for stronger provenance.
+
+
+## Opening linked frames from Session Review
+
+Session Review includes an explicit action for the selected observation. For observations tagged with a stable `annotation-id:` value, the app looks for that annotation in the currently loaded local annotation dataset and locates the frame by timestamp and filename. If the dataset or frame is not loaded, the app directs the user to load the matching sampling manifest rather than guessing. Ordinary observations without annotation IDs remain unaffected.
