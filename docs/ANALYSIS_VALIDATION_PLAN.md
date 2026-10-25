@@ -42,3 +42,8 @@ No game-memory reading, anti-cheat bypass, automated gameplay inputs, or covert 
 ## Implemented first prototype: offline frame sampling
 
 The optional utility at src/siegesense/vision/frame_sampling.py samples a user-selected local recording into a separate, empty output directory and writes a versioned JSON manifest with source SHA-256, source FPS/resolution/duration, sampling range, interval, frame indices, and timestamps. Install the optional dependency with pip install -e ".[vision]". This is a sampling foundation only; it does not detect targets, crosshair position, movement, or skill. Validate it against representative recordings before using outputs for quantitative claims.
+
+
+## Implemented annotation data layer
+
+`src/siegesense/vision/annotations.py` now provides a local annotation store keyed to a sampling manifest's source SHA-256. Supported human labels are target transition, crosshair on/off target, movement start/stop, ambiguous, and unusable frame. An annotation must reference an exact sampled frame from the manifest. JSON datasets are schema-versioned and saved via a temporary file followed by replacement. Loading against a different source fingerprint is rejected. This is a data layer only; a graphical annotation UI is still pending.
