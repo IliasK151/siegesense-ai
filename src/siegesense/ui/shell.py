@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from siegesense.services.session_service import SessionService
-
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -16,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from siegesense.services.session_service import SessionService
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
