@@ -30,7 +30,11 @@ from PySide6.QtWidgets import (
 )
 
 from siegesense.domain.models import ObservationKind
-from siegesense.services.export_service import render_session_summary
+from siegesense.services.export_service import (
+    render_session_csv,
+    render_session_json,
+    render_session_summary,
+)
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 
@@ -843,20 +847,29 @@ class MainWindow(QMainWindow):
             if session is None:
                 raise ValueError("The selected session is no longer available.")
             observations = self.session_service.list_observations(session.id)
-            content = render_session_summary(session, observations)
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             QMessageBox.warning(self, "Could not prepare export", f"No export was created.\\n\\n{error}")
             return
-        target, _ = QFileDialog.getSaveFileName(
+        target, selected_filter = QFileDialog.getSaveFileName(
             self,
             "Export session summary",
             "session-summary.md",
-            "Markdown files (*.md)",
+            "Markdown summary (*.md);;Structured JSON (*.json);;Observation CSV (*.csv)",
         )
         if not target:
             return
+        suffix = Path(target).suffix.casefold()
+        if not suffix:
+            suffix = ".json" if "JSON" in selected_filter else ".csv" if "CSV" in selected_filter else ".md"
+            target = f"{target}{suffix}"
         try:
-            Path(target).write_text(content, encoding="utf-8")
+            if suffix == ".json":
+                content = render_session_json(session, observations)
+            elif suffix == ".csv":
+                content = render_session_csv(observations)
+            else:
+                content = render_session_summary(session, observations)
+            Path(target).write_text(content, encoding="utf-8", newline="")
         except OSError as error:
             QMessageBox.warning(self, "Could not write export", f"The summary was not saved.\\n\\n{error}")
             return
