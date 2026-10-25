@@ -6,6 +6,7 @@ import sqlite3
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from siegesense.domain.models import ObservationKind
 from siegesense.services.session_service import SessionService
+from siegesense.services.settings_service import SettingsService
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -87,6 +89,7 @@ class MainWindow(QMainWindow):
     def __init__(self, session_service: SessionService | None = None) -> None:
         super().__init__()
         self.session_service = session_service
+        self.settings_service = SettingsService(session_service._database) if session_service is not None else None
         self.setWindowTitle("SiegeSense AI")
         self.resize(1320, 850)
         self.setMinimumSize(960, 640)
@@ -197,6 +200,8 @@ class MainWindow(QMainWindow):
 
         if name == "Session Review":
             self._build_session_review(page_layout)
+        elif name == "Settings Lab":
+            self._build_settings_lab(page_layout)
         elif name == "Overview":
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
@@ -323,6 +328,139 @@ class MainWindow(QMainWindow):
         review_layout.addWidget(self.review_status)
         page_layout.addWidget(review_panel, 1)
         self._refresh_review_sessions()
+
+    def _build_settings_lab(self, page_layout: QVBoxLayout) -> None:
+        """Build a settings snapshot and one-variable experiment workflow."""
+        snapshot_panel = QFrame()
+        snapshot_panel.setObjectName("Panel")
+        layout = QVBoxLayout(snapshot_panel)
+        layout.setContentsMargins(18, 16, 18, 18)
+        layout.setSpacing(12)
+        layout.addWidget(QLabel("Record your current in-game settings"))
+        form = QFormLayout()
+        self.settings_label_input = QLineEdit("Baseline")
+        form.addRow("Snapshot name", self.settings_label_input)
+        self.settings_spinboxes: dict[str, QSpinBox] = {}
+        for key, label, minimum, maximum, value in (
+            ("horizontal", "Horizontal sensitivity", 1, 100, 6),
+            ("vertical", "Vertical sensitivity", 1, 100, 6),
+            ("ads_1x", "1.0× ADS", 1, 200, 40),
+            ("ads_2_5x", "2.5× ADS", 1, 200, 44),
+            ("ads_3_5x", "3.5× ADS", 1, 200, 40),
+            ("ads_8x", "8.0× ADS", 1, 200, 36),
+        ):
+            control = QSpinBox()
+            control.setRange(minimum, maximum)
+            control.setValue(value)
+            self.settings_spinboxes[key] = control
+            form.addRow(label, control)
+        layout.addLayout(form)
+        save_button = QPushButton("Save settings snapshot")
+        save_button.clicked.connect(self._save_settings_snapshot)
+        layout.addWidget(save_button, 0, Qt.AlignmentFlag.AlignLeft)
+        page_layout.addWidget(snapshot_panel)
+
+        experiment_panel = QFrame()
+        experiment_panel.setObjectName("Panel")
+        experiment_layout = QVBoxLayout(experiment_panel)
+        experiment_layout.setContentsMargins(18, 16, 18, 18)
+        experiment_layout.setSpacing(12)
+        experiment_layout.addWidget(QLabel("Compare settings deliberately"))
+        experiment_form = QFormLayout()
+        self.experiment_title_input = QLineEdit("Single-variable test")
+        self.experiment_hypothesis_input = QLineEdit("A small change may reduce overshooting")
+        self.experiment_variable_input = QLineEdit("horizontal sensitivity")
+        self.experiment_baseline_combo = QComboBox()
+        self.experiment_test_combo = QComboBox()
+        experiment_form.addRow("Experiment", self.experiment_title_input)
+        experiment_form.addRow("Hypothesis", self.experiment_hypothesis_input)
+        experiment_form.addRow("Variable changed", self.experiment_variable_input)
+        experiment_form.addRow("Baseline snapshot", self.experiment_baseline_combo)
+        experiment_form.addRow("Test snapshot", self.experiment_test_combo)
+        experiment_layout.addLayout(experiment_form)
+        create_experiment = QPushButton("Record experiment")
+        create_experiment.clicked.connect(self._create_settings_experiment)
+        experiment_layout.addWidget(create_experiment, 0, Qt.AlignmentFlag.AlignLeft)
+        self.settings_experiment_list = QListWidget()
+        self.settings_experiment_list.setMinimumHeight(100)
+        experiment_layout.addWidget(self.settings_experiment_list)
+        self.settings_status = QLabel("Settings are stored locally. The app never applies changes to the game.")
+        self.settings_status.setObjectName("Muted")
+        experiment_layout.addWidget(self.settings_status)
+        page_layout.addWidget(experiment_panel, 1)
+        self._refresh_settings_data()
+
+    def _save_settings_snapshot(self) -> None:
+        if self.settings_service is None:
+            QMessageBox.warning(self, "Storage unavailable", "Settings storage has not been configured.")
+            return
+        label = self.settings_label_input.text().strip()
+        if not label:
+            QMessageBox.information(self, "Snapshot name required", "Give this settings snapshot a name.")
+            return
+        values = {key: control.value() for key, control in self.settings_spinboxes.items()}
+        try:
+            snapshot = self.settings_service.save_snapshot(label, values)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            QMessageBox.warning(self, "Could not save settings", f"Your settings were not saved.\\n\\n{error}")
+            return
+        self._refresh_settings_data(select_snapshot_id=snapshot.id)
+        self.settings_status.setText("Settings snapshot saved locally.")
+
+    def _refresh_settings_data(self, *, select_snapshot_id: str | None = None) -> None:
+        if not hasattr(self, "experiment_baseline_combo"):
+            return
+        try:
+            snapshots = self.settings_service.list_snapshots() if self.settings_service else []
+            experiments = self.settings_service.list_experiments() if self.settings_service else []
+        except (OSError, RuntimeError, sqlite3.Error) as error:
+            self.settings_status.setText(f"Could not load settings history: {error}")
+            return
+        for combo in (self.experiment_baseline_combo, self.experiment_test_combo):
+            current = select_snapshot_id or combo.currentData()
+            combo.blockSignals(True)
+            combo.clear()
+            for snapshot in snapshots:
+                combo.addItem(snapshot.label, snapshot.id)
+            index = combo.findData(current)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+            combo.blockSignals(False)
+        self.settings_experiment_list.clear()
+        for experiment in experiments:
+            baseline = next((s.label for s in snapshots if s.id == experiment.baseline_snapshot_id), "Missing baseline")
+            test = next((s.label for s in snapshots if s.id == experiment.test_snapshot_id), "Not selected")
+            self.settings_experiment_list.addItem(
+                f"{experiment.title}  ·  {experiment.status.title()}  ·  {baseline} → {test}"
+            )
+        if not experiments:
+            self.settings_experiment_list.addItem("No experiments recorded yet.")
+
+    def _create_settings_experiment(self) -> None:
+        if self.settings_service is None:
+            QMessageBox.warning(self, "Storage unavailable", "Settings storage has not been configured.")
+            return
+        baseline_id = self.experiment_baseline_combo.currentData()
+        test_id = self.experiment_test_combo.currentData()
+        title = self.experiment_title_input.text().strip()
+        hypothesis = self.experiment_hypothesis_input.text().strip()
+        if not baseline_id:
+            QMessageBox.information(self, "Baseline required", "Save a baseline snapshot first.")
+            return
+        if not title or not hypothesis:
+            QMessageBox.information(self, "Experiment details required", "Enter an experiment title and hypothesis.")
+            return
+        try:
+            experiment = self.settings_service.create_experiment(
+                title, hypothesis, baseline_id,
+                changed_variable=self.experiment_variable_input.text().strip(),
+                test_snapshot_id=test_id,
+            )
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            QMessageBox.warning(self, "Could not record experiment", f"Your experiment was not saved.\\n\\n{error}")
+            return
+        self._refresh_settings_data()
+        self.settings_status.setText(f"Experiment recorded locally: {experiment.title}")
 
     def _browse_session_media(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
