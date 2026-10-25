@@ -308,6 +308,12 @@ class MainWindow(QMainWindow):
         page_layout.addWidget(panel("What this page measures", description))
         if not hasattr(self, "_category_observation_lists"):
             self._category_observation_lists: dict[str, QListWidget] = {}
+            self._category_filter_inputs: dict[str, QLineEdit] = {}
+        category_filter = QLineEdit()
+        category_filter.setPlaceholderText("Filter by note text or tag…")
+        category_filter.textChanged.connect(lambda _text: self._refresh_category_review(category))
+        self._category_filter_inputs[category] = category_filter
+        page_layout.addWidget(category_filter)
         observation_list = QListWidget()
         observation_list.setMinimumHeight(240)
         self._category_observation_lists[category] = observation_list
@@ -338,17 +344,29 @@ class MainWindow(QMainWindow):
             observation_list.addItem(f"Could not load saved observations: {error}")
             return
         records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
-        if not records:
-            observation_list.addItem(
+        query = self._category_filter_inputs[category].text().strip().casefold()
+        visible = [
+            (session, observation)
+            for session, observation in records
+            if not query
+            or query in observation.text.casefold()
+            or any(query in tag.casefold() for tag in observation.tags)
+        ]
+        if not visible:
+            message = (
                 f"No {category} observations yet. Add one in Session Review to build a useful review history."
+                if not records
+                else "No observations match this filter."
             )
+            observation_list.addItem(message)
             return
-        observation_list.addItem(f"{len(records)} manually logged {category} observation(s)")
-        for session, observation in records:
+        observation_list.addItem(f"{len(visible)} manually logged {category} observation(s)")
+        for session, observation in visible:
             seconds = observation.timestamp_ms // 1000
             timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            tags = f"  ·  #{', #'.join(observation.tags)}" if observation.tags else ""
             observation_list.addItem(
-                f"{session.title}  ·  {timestamp}  ·  {observation.text}"
+                f"{session.title}  ·  {timestamp}  ·  {observation.text}{tags}"
             )
 
     def _build_ai_coach(self, page_layout: QVBoxLayout) -> None:
@@ -424,8 +442,9 @@ class MainWindow(QMainWindow):
         for session, observation in records[:10]:
             seconds = observation.timestamp_ms // 1000
             timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            tags = f" · Tags: {', '.join(observation.tags)}" if observation.tags else ""
             self.coach_evidence_list.addItem(
-                f"{session.title} · {timestamp} · {observation.kind.value.title()} · {observation.text}"
+                f"{session.title} · {timestamp} · {observation.kind.value.title()} · {observation.text}{tags}"
             )
 
     def _refresh_overview(self) -> None:
