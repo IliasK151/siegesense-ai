@@ -77,3 +77,8 @@ Session records support an optional SHA-256 fingerprint for their linked media. 
 ## Evaluation dataset hygiene prototype
 
 `src/siegesense/vision/evaluation.py` provides a first reporting/validation utility for named annotation JSON datasets. It summarizes annotation counts by human label and rejects reuse of the same source SHA-256 across separate dataset entries, guarding against recording-level leakage between training and evaluation. It does not train a model or claim detection accuracy. Before any model evaluation, curate multiple distinct recordings, agree on annotation definitions, and record annotator agreement and exclusions.
+
+
+## Annotation guide and reviewer agreement
+
+The human-label definitions and review protocol are in [ANNOTATION_GUIDE.md](ANNOTATION_GUIDE.md). The evaluation helper now compares two annotation JSON files on the same source recording and exact overlapping sampled frames, reporting overlap count, exact agreement, observed agreement, and Cohen's kappa when defined. Agreement is not a correctness score; model validation still requires separate held-out recordings and measurable detection metrics.
