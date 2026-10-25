@@ -52,3 +52,38 @@ def test_service_rejects_cross_provenance_snapshot(service: SettingsService) -> 
         service.create_experiment(
             "Invalid comparison", "Do not mix records", baseline.id, test_snapshot_id=demo_test.id
         )
+
+
+
+def test_experiment_requires_exactly_one_changed_setting(service: SettingsService) -> None:
+    baseline = service.save_snapshot("Baseline", {"horizontal": 6, "vertical": 6})
+    identical = service.save_snapshot("Identical", {"horizontal": 6, "vertical": 6})
+    multiple = service.save_snapshot("Multiple changes", {"horizontal": 5, "vertical": 5})
+
+    with pytest.raises(ValueError, match="snapshots are identical"):
+        service.create_experiment(
+            "No change", "Check one variable", baseline.id,
+            changed_variable="horizontal sensitivity", test_snapshot_id=identical.id,
+        )
+
+    with pytest.raises(ValueError, match="exactly one changed setting"):
+        service.create_experiment(
+            "Confounded test", "Check one variable", baseline.id,
+            changed_variable="horizontal sensitivity", test_snapshot_id=multiple.id,
+        )
+
+    assert service.list_experiments() == []
+
+
+def test_experiment_allows_one_changed_setting_among_added_or_removed_keys(
+    service: SettingsService,
+) -> None:
+    baseline = service.save_snapshot("Baseline", {"horizontal": 6, "vertical": 6})
+    test = service.save_snapshot("Test", {"horizontal": 5, "vertical": 6})
+
+    experiment = service.create_experiment(
+        "One-variable test", "A small change may help", baseline.id,
+        changed_variable="horizontal sensitivity", test_snapshot_id=test.id,
+    )
+
+    assert experiment.test_snapshot_id == test.id
