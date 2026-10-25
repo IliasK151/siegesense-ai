@@ -2,6 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from siegesense.storage.database import Database
