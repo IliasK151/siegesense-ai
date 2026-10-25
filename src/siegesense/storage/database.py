@@ -7,7 +7,14 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from siegesense.domain.models import MetricResult, Observation, ObservationKind, Session, SettingsExperiment, SettingsSnapshot
+from siegesense.domain.models import (
+    MetricResult,
+    Observation,
+    ObservationKind,
+    Session,
+    SettingsExperiment,
+    SettingsSnapshot,
+)
 
 SCHEMA_VERSION = 1
 
