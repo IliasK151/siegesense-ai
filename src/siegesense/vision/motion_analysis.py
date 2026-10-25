@@ -21,6 +21,7 @@ class MotionPair:
     median_dy_px: float
     median_motion_px: float
     p90_motion_px: float
+    coherent_feature_ratio: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +135,12 @@ def analyze_manifest_motion(
         dx = new_points[valid, 0] - old_points[valid, 0]
         dy = new_points[valid, 1] - old_points[valid, 1]
         magnitude = (dx * dx + dy * dy) ** 0.5
+        # Fraction of tracked points whose displacement is within 3 resized-image
+        # pixels of the median flow vector. This describes coherence, not aim.
+        median_dx = float(_percentile(dx, 50))
+        median_dy = float(_percentile(dy, 50))
+        residual = ((dx - median_dx) ** 2 + (dy - median_dy) ** 2) ** 0.5
+        coherent_ratio = float((residual <= 3.0).sum()) / len(residual)
         results.append(
             MotionPair(
                 start_timestamp_ms=start_ms,
@@ -143,6 +150,7 @@ def analyze_manifest_motion(
                 median_dy_px=round(float(_percentile(dy, 50)), 3),
                 median_motion_px=round(float(_percentile(magnitude, 50)), 3),
                 p90_motion_px=round(float(_percentile(magnitude, 90)), 3),
+                coherent_feature_ratio=round(coherent_ratio, 3),
             )
         )
 
@@ -153,6 +161,7 @@ def analyze_manifest_motion(
         "Camera motion, recoil animation, moving objects, effects, compression, and scene changes can affect estimates.",
         "This does not measure mouse input, true aim direction, target alignment, hit probability, or player skill.",
         "Only adjacent frames exactly one sampling interval apart are eligible; timestamp gaps are excluded.",
+        "Coherent-feature ratio is the share of tracked points within 3 resized-image pixels of the median flow vector; it is not a validated camera-motion classifier.",
         "When there are more eligible pairs than the configured limit, a deterministic stride subsamples them.",
     )
     return MotionReport(
