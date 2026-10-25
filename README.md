@@ -4,7 +4,7 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early development. The repository is the source of truth for requirements, implementation, issues, and decisions. The current app is an initial desktop shell; automatic vision analysis is not implemented.
+> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. Automatic vision analysis is not implemented.
 
 ## Product principles
 
@@ -25,14 +25,15 @@ SiegeSense AI is intended to help players understand their aim, movement, settin
 6. AI Coach
 7. Preferences & Privacy
 
-The current shell includes navigation and placeholder states for all destinations. A placeholder is not a completed feature. Recorded-footage analysis and measurable coaching capabilities will be delivered as separate, testable increments.
+Overview, Session Review, and Settings Lab have initial functional workflows. Aim Lab, Movement, AI Coach, and Preferences & Privacy remain scaffolded. The recorded-video player still needs verification against representative real clips. Recorded-footage analysis and measurable coaching capabilities will be delivered as separate, testable increments.
 
 ## Technology
 
 - Windows-first desktop application
 - Python 3.10–3.12
 - PySide6
-- Local SQLite schema and session/settings storage APIs are implemented on the feature branch; UI integration and safe migration remain in progress
+- Local SQLite schema and session/settings services; Session Review and Settings Lab are connected to the service layer
+- Safe migration from the original MVP remains blocked until its source and JSON schema are available
 - Automated tests and CI checks
 
 See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), and [decisions](docs/DECISIONS.md).
