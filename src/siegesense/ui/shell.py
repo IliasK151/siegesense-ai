@@ -727,6 +727,9 @@ class MainWindow(QMainWindow):
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
         history_layout.addWidget(self.annotation_history_list)
+        delete_annotation_button = QPushButton("Delete selected annotation")
+        delete_annotation_button.clicked.connect(self._delete_selected_annotation)
+        history_layout.addWidget(delete_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
         page_layout.addWidget(history_panel)
         self._annotation_store: AnnotationStore | None = None
         self._annotation_manifest: dict | None = None
@@ -850,10 +853,28 @@ class MainWindow(QMainWindow):
             return
         for annotation in self._annotation_store.annotations:
             note = f" — {annotation.note}" if annotation.note else ""
-            self.annotation_history_list.addItem(
+            item = QListWidgetItem(
                 f"{annotation.timestamp_ms / 1000:.2f}s  ·  "
                 f"{annotation.label.replace('_', ' ')}{note}"
             )
+            item.setData(Qt.ItemDataRole.UserRole, annotation.annotation_id)
+            self.annotation_history_list.addItem(item)
+
+    def _delete_selected_annotation(self) -> None:
+        if self._annotation_store is None:
+            self.annotation_status.setText("Load a valid sampling manifest first.")
+            return
+        item = self.annotation_history_list.currentItem()
+        if item is None:
+            self.annotation_status.setText("Select a saved annotation to delete.")
+            return
+        annotation_id = item.data(Qt.ItemDataRole.UserRole)
+        if not self._annotation_store.remove(annotation_id):
+            self.annotation_status.setText("That annotation no longer exists.")
+            self._refresh_annotation_history()
+            return
+        self._refresh_annotation_history()
+        self.annotation_status.setText("Annotation deleted from local storage.")
 
     def _build_settings_lab(self, page_layout: QVBoxLayout) -> None:
         """Build a settings snapshot and one-variable experiment workflow."""
