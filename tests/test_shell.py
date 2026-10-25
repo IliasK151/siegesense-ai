@@ -15,8 +15,11 @@ def _application() -> QApplication:
 def test_shell_contains_all_planned_destinations() -> None:
     _application()
     window = MainWindow()
-    assert window.page_stack.count() == len(NAV_ITEMS) == 8
-    window.close()
+    try:
+        assert window.page_stack.count() == len(NAV_ITEMS) == 8
+        assert "Clip Annotation" in window._nav_buttons
+    finally:
+        window.close()
 
 
 def test_navigation_updates_selected_page_and_breadcrumb() -> None:
