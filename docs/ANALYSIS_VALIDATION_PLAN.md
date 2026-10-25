@@ -120,3 +120,8 @@ This is a descriptive visual-motion prototype, not a validated aim or movement m
 
 
 The coherent-feature ratio is the fraction of tracked features whose displacement lies within 3 resized-image pixels of the median displacement vector. It may describe whether visible features moved in a similar direction, but is not a validated camera-motion classifier and must not be interpreted as aim quality.
+
+
+### Manual label-transition counts
+
+The sequence summary counts adjacent `crosshair_off_target`→`crosshair_on_target` and reverse transitions only when two annotated timestamps are exactly one known sampling interval apart. Timestamp gaps break adjacency; unknown intervals produce unavailable counts. These are descriptive counts of human labels, not automatic correction detection or aim-quality scores.
