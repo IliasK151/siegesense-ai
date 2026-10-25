@@ -31,6 +31,7 @@ def test_session_review_creates_session_and_timestamped_observation(app: QApplic
 
         window.observation_timestamp.setValue(83)
         window.observation_kind.setCurrentIndex(window.observation_kind.findData("aim"))
+        window.observation_tags_input.setText("Overshoot, ACOG, overshoot")
         window.observation_text.setText("Overshot during target transition")
         window._add_review_observation()
 
@@ -39,8 +40,16 @@ def test_session_review_creates_session_and_timestamped_observation(app: QApplic
         assert observations[0].timestamp_ms == 83_000
         assert observations[0].text == "Overshot during target transition"
         assert observations[0].kind.value == "aim"
+        assert observations[0].tags == ("overshoot", "acog")
         assert window.observation_list.count() == 1
         assert "01:23" in window.observation_list.item(0).text()
+        assert "#overshoot, #acog" in window.observation_list.item(0).text()
+        window.observation_filter_input.setText("acog")
+        assert window.observation_list.count() == 1
+        assert "Overshot during target transition" in window.observation_list.item(0).text()
+        window.observation_filter_input.setText("missing-tag")
+        assert window.observation_list.count() == 1
+        assert "No observations match" in window.observation_list.item(0).text()
     finally:
         window.close()
         database.close()
