@@ -338,15 +338,15 @@ class MainWindow(QMainWindow):
             return
         records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
         if not records:
-            self.category_observation_list.addItem(
+            observation_list.addItem(
                 f"No {category} observations yet. Add one in Session Review to build a useful review history."
             )
             return
-        self.category_observation_list.addItem(f"{len(records)} manually logged {category} observation(s)")
+        observation_list.addItem(f"{len(records)} manually logged {category} observation(s)")
         for session, observation in records:
             seconds = observation.timestamp_ms // 1000
             timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
-            self.category_observation_list.addItem(
+            observation_list.addItem(
                 f"{session.title}  ·  {timestamp}  ·  {observation.text}"
             )
 
