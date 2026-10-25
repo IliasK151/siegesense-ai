@@ -47,6 +47,7 @@ def test_settings_lab_saves_snapshots_and_records_experiment(app: QApplication) 
         assert experiments[0].test_snapshot_id == test_id
         assert experiments[0].changed_variable == "horizontal sensitivity"
         assert window.settings_experiment_list.count() == 1
+        assert "1 setting change(s)" in window.settings_experiment_list.item(0).text()
         comparison = window.settings_comparison_label.text()
         assert "Horizontal: 6 → 5" in comparison
         assert "1 setting(s) differ" in comparison
