@@ -46,7 +46,7 @@ def test_settings_lab_requires_outcome_for_completed_experiment(app: QApplicatio
     database = Database(":memory:")
     service = SettingsService(database)
     baseline = service.save_snapshot("Baseline", {"horizontal": 6})
-    experiment = service.create_experiment("Test", "Check one change", baseline.id)
+    service.create_experiment("Test", "Check one change", baseline.id)
     window = MainWindow(settings_service=service)
     try:
         window.experiment_status_combo.setCurrentIndex(
