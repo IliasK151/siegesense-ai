@@ -133,8 +133,18 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
         assert "crosshair off target" in observations[0].text
         assert "overshot target" in observations[0].text
         assert "clip-annotation" in observations[0].tags
+        assert any(tag.startswith("annotation-id:") for tag in observations[0].tags)
         assert window.page_stack.currentWidget() is not None
         assert "Session Review" in window.breadcrumb.text()
+
+        window.show_page("Clip Annotation")
+        window.annotation_history_list.setCurrentRow(0)
+        window.annotation_session_combo.setCurrentIndex(
+            window.annotation_session_combo.findData(session.id)
+        )
+        window._link_annotation_to_session()
+        assert len(service.list_observations(session.id)) == 1
+        assert "already linked" in window.annotation_status.text().lower()
     finally:
         window.close()
         database.close()
