@@ -2,7 +2,6 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from PySide6.QtWidgets import QApplication
 
 from siegesense.storage.database import Database
@@ -34,6 +33,7 @@ def test_annotation_lab_exports_motion_report_locally(
             lambda path: SimpleNamespace(
                 median_motion_px_per_sample=2.0,
                 p90_motion_px_per_sample=4.0,
+                pairs=(SimpleNamespace(coherent_feature_ratio=0.75),),
             ),
         )
         monkeypatch.setattr(
@@ -45,6 +45,7 @@ def test_annotation_lab_exports_motion_report_locally(
 
         assert "Median visible-feature motion: 2.00" in window.annotation_status.text()
         assert "not mouse input" in window.annotation_status.text()
+        assert "coherent-feature ratio: 75%" in window.annotation_status.text()
     finally:
         window.close()
         database.close()
