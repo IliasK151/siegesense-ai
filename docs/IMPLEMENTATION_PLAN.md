@@ -26,7 +26,9 @@ The target is a local-first Rainbow Six Siege review and coaching desktop app th
 **Status: in progress.** The current sampler derives manifest timestamps from the requested seek grid and frame indices from nominal FPS; it does not independently verify actual decoded-frame timestamps. This limitation must remain explicit until measured against real media and a trusted reference.
 
 - Audit frame sampling against actual media timestamps, including constant-frame-rate and variable-frame-rate clips.
-- Add tests for timestamp accuracy, duplicate/near-duplicate timestamps, rotation/orientation metadata, unreadable files, and interrupted sampling.
+- [x] Add manifest provenance that distinguishes requested seek-grid positions from OpenCV's reported post-read position.
+- [x] Reject non-integer/bool timing values and explicit seek failures.
+- [ ] Add tests for timestamp accuracy, duplicate/near-duplicate timestamps, rotation/orientation metadata, unreadable files, and interrupted sampling.
 - Make sampling reports explicit about effective frame timestamps, source fingerprint, codec/metadata limitations, and skipped frames.
 - Ensure session-to-recording links remain safe when source paths change or recordings are replaced.
 
