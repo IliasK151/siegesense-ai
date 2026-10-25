@@ -6,10 +6,10 @@ small and file-based so datasets remain inspectable and portable.
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
-import math
 from pathlib import Path
 
 ANNOTATION_SCHEMA_VERSION = 1
