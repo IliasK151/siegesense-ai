@@ -518,7 +518,20 @@ class MainWindow(QMainWindow):
         experiment_layout.addWidget(create_experiment, 0, Qt.AlignmentFlag.AlignLeft)
         self.settings_experiment_list = QListWidget()
         self.settings_experiment_list.setMinimumHeight(100)
+        self.settings_experiment_list.currentItemChanged.connect(self._load_selected_experiment)
         experiment_layout.addWidget(self.settings_experiment_list)
+        result_form = QFormLayout()
+        self.experiment_status_combo = QComboBox()
+        for status in ("planned", "running", "completed", "inconclusive", "cancelled"):
+            self.experiment_status_combo.addItem(status.title(), status)
+        self.experiment_outcome_input = QLineEdit()
+        self.experiment_outcome_input.setPlaceholderText("Observed result, or why it was inconclusive")
+        result_form.addRow("Experiment status", self.experiment_status_combo)
+        result_form.addRow("Observed outcome", self.experiment_outcome_input)
+        experiment_layout.addLayout(result_form)
+        update_result = QPushButton("Save experiment result")
+        update_result.clicked.connect(self._update_selected_experiment)
+        experiment_layout.addWidget(update_result, 0, Qt.AlignmentFlag.AlignLeft)
         self.settings_status = QLabel("Settings are stored locally. The app never applies changes to the game.")
         self.settings_status.setObjectName("Muted")
         experiment_layout.addWidget(self.settings_status)
@@ -566,11 +579,65 @@ class MainWindow(QMainWindow):
         for experiment in experiments:
             baseline = next((s.label for s in snapshots if s.id == experiment.baseline_snapshot_id), "Missing baseline")
             test = next((s.label for s in snapshots if s.id == experiment.test_snapshot_id), "Not selected")
-            self.settings_experiment_list.addItem(
+            item = QListWidgetItem(
                 f"{experiment.title}  ·  {experiment.status.title()}  ·  {baseline} → {test}"
             )
+            item.setData(Qt.ItemDataRole.UserRole, experiment.id)
+            self.settings_experiment_list.addItem(item)
         if not experiments:
             self.settings_experiment_list.addItem("No experiments recorded yet.")
+            self.experiment_status_combo.setEnabled(False)
+            self.experiment_outcome_input.setEnabled(False)
+        else:
+            self.experiment_status_combo.setEnabled(True)
+            self.experiment_outcome_input.setEnabled(True)
+            if self.settings_experiment_list.currentItem() is None:
+                self.settings_experiment_list.setCurrentRow(0)
+
+    def _load_selected_experiment(self, *_args: object) -> None:
+        item = self.settings_experiment_list.currentItem()
+        experiment_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if not experiment_id or self.settings_service is None:
+            return
+        experiment = next(
+            (entry for entry in self.settings_service.list_experiments() if entry.id == experiment_id),
+            None,
+        )
+        if experiment is None:
+            return
+        index = self.experiment_status_combo.findData(experiment.status)
+        if index >= 0:
+            self.experiment_status_combo.setCurrentIndex(index)
+        self.experiment_outcome_input.setText(experiment.outcome or "")
+
+    def _update_selected_experiment(self) -> None:
+        item = self.settings_experiment_list.currentItem()
+        experiment_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if not experiment_id or self.settings_service is None:
+            QMessageBox.information(self, "Select an experiment", "Record an experiment before updating its result.")
+            return
+        outcome = self.experiment_outcome_input.text().strip()
+        status = self.experiment_status_combo.currentData()
+        if status in {"completed", "inconclusive"} and not outcome:
+            QMessageBox.information(
+                self,
+                "Outcome required",
+                "Add a short observed outcome before marking the experiment completed or inconclusive.",
+            )
+            self.experiment_outcome_input.setFocus()
+            return
+        try:
+            experiment = self.settings_service.update_experiment(
+                experiment_id, status=status, outcome=outcome
+            )
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            QMessageBox.warning(
+                self, "Could not update experiment", f"Your result was not saved.\\n\\n{error}"
+            )
+            return
+        self._refresh_settings_data()
+        self.settings_status.setText(f"Experiment result saved: {experiment.status.title()}.")
+        self._refresh_overview()
 
     def _create_settings_experiment(self) -> None:
         if self.settings_service is None:
