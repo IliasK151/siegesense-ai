@@ -87,3 +87,16 @@ def test_experiment_allows_one_changed_setting_among_added_or_removed_keys(
     )
 
     assert experiment.test_snapshot_id == test.id
+
+
+
+def test_experiment_detects_a_removed_null_valued_setting(service: SettingsService) -> None:
+    baseline = service.save_snapshot("Baseline", {"horizontal": 6, "optional": None})
+    test = service.save_snapshot("Test", {"horizontal": 6})
+
+    experiment = service.create_experiment(
+        "Remove optional setting", "Check one configuration difference", baseline.id,
+        changed_variable="optional setting", test_snapshot_id=test.id,
+    )
+
+    assert experiment.test_snapshot_id == test.id
