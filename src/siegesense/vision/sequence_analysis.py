@@ -16,7 +16,7 @@ from siegesense.vision.annotations import load_dataset
 @dataclass(frozen=True, slots=True)
 class LabelRunSummary:
     label: str
-    run_count: int
+    run_count: int | None
     total_frames_in_runs: int
     median_observed_span_ms: float | None
     longest_observed_span_ms: int | None
@@ -99,7 +99,7 @@ def summarize_annotated_sequences(
         )
         return LabelRunSummary(
             label=target_label,
-            run_count=len(runs),
+            run_count=len(runs) if sampling_interval_ms is not None else None,
             total_frames_in_runs=sum(len(run) for run in runs),
             median_observed_span_ms=(
                 statistics.median(spans) if spans else None
