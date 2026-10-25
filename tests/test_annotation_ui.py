@@ -45,6 +45,9 @@ def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, 
         assert window.annotation_frame_list.count() == 1
         assert window.annotation_frame_list.currentItem() is not None
         assert not window.annotation_frame_preview.pixmap().isNull()
+        assert window.annotation_frame_counter.text() == "Frame 1 of 1"
+        assert not window.annotation_previous_button.isEnabled()
+        assert not window.annotation_next_button.isEnabled()
 
         window.annotation_label_combo.setCurrentIndex(
             window.annotation_label_combo.findData("crosshair_off_target")
