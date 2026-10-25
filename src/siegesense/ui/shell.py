@@ -305,18 +305,22 @@ class MainWindow(QMainWindow):
             else "Review notes tagged as movement. These are manual observations, not automated movement tracking."
         )
         page_layout.addWidget(panel("What this page measures", description))
-        self.category_observation_list = QListWidget()
-        self.category_observation_list.setMinimumHeight(240)
-        page_layout.addWidget(self.category_observation_list, 1)
+        if not hasattr(self, "_category_observation_lists"):
+            self._category_observation_lists: dict[str, QListWidget] = {}
+        observation_list = QListWidget()
+        observation_list.setMinimumHeight(240)
+        self._category_observation_lists[category] = observation_list
+        page_layout.addWidget(observation_list, 1)
         refresh = QPushButton("Refresh from saved sessions")
         refresh.clicked.connect(lambda: self._refresh_category_review(category))
         page_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
         self._refresh_category_review(category)
 
     def _refresh_category_review(self, category: str) -> None:
-        if not hasattr(self, "category_observation_list"):
+        observation_list = getattr(self, "_category_observation_lists", {}).get(category)
+        if observation_list is None:
             return
-        self.category_observation_list.clear()
+        observation_list.clear()
         try:
             sessions = self.session_service.list_sessions() if self.session_service else []
             records = [
@@ -330,7 +334,7 @@ class MainWindow(QMainWindow):
                 if observation.kind.value == category
             ]
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
-            self.category_observation_list.addItem(f"Could not load saved observations: {error}")
+            observation_list.addItem(f"Could not load saved observations: {error}")
             return
         records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
         if not records:
