@@ -67,6 +67,7 @@ class PointPickerLabel(QLabel):
         """Restore saved normalized point coordinates and redraw their markers."""
         self._reticle_point = self._validate_point(reticle)
         self._target_point = self._validate_point(target)
+        self.set_marking_mode(None)
         self.update()
 
     def clear_points(self) -> None:
