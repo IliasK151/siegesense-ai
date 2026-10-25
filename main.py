@@ -1,6 +1,6 @@
 """Launch SiegeSense AI."""
 
-from siegesense.app import main
+from siegesense.app import main  # noqa: I001
 
 
 if __name__ == "__main__":
