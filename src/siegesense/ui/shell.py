@@ -778,6 +778,8 @@ class MainWindow(QMainWindow):
         index = self.annotation_session_combo.findData(current_id)
         if index >= 0:
             self.annotation_session_combo.setCurrentIndex(index)
+        elif self.annotation_session_combo.count() > 0:
+            self.annotation_session_combo.setCurrentIndex(0)
         self.annotation_session_combo.blockSignals(False)
         if not sessions:
             self.annotation_session_combo.setPlaceholderText("Create a session in Session Review first")
@@ -803,6 +805,15 @@ class MainWindow(QMainWindow):
             self.annotation_status.setText("Selected annotation no longer exists.")
             self._refresh_annotation_history()
             return
+        annotation_tag = f"annotation-id:{annotation.annotation_id}"
+        try:
+            existing_observations = self.session_service.list_observations(session_id)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.annotation_status.setText(f"Could not check existing session observations: {error}")
+            return
+        if any(annotation_tag in item.tags for item in existing_observations):
+            self.annotation_status.setText("This annotation is already linked to the selected session.")
+            return
         label = annotation.label.replace("_", " ")
         note = f" — {annotation.note}" if annotation.note else ""
         text = f"Clip annotation: {label}{note} [frame: {annotation.frame_filename}]"
@@ -817,7 +828,7 @@ class MainWindow(QMainWindow):
                 annotation.timestamp_ms,
                 text,
                 kind=kind,
-                tags=("clip-annotation", annotation.label),
+                tags=("clip-annotation", annotation.label, annotation_tag),
             )
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             self.annotation_status.setText(f"Could not link annotation: {error}")
