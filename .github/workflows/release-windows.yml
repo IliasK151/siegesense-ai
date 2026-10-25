@@ -46,9 +46,14 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "SiegeSenseSmokeData"
-          & "dist/SiegeSenseAI/SiegeSenseAI.exe" --smoke-test
-          if ($LASTEXITCODE -ne 0) {
-            throw "Packaged desktop smoke test failed with exit code $LASTEXITCODE"
+          $env:SIEGESENSE_SMOKE_LOG = Join-Path $env:RUNNER_TEMP "siegesense-smoke-test-error.txt"
+          Remove-Item $env:SIEGESENSE_SMOKE_LOG -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath (Resolve-Path "dist/SiegeSenseAI/SiegeSenseAI.exe") -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $env:SIEGESENSE_SMOKE_LOG) {
+              Get-Content $env:SIEGESENSE_SMOKE_LOG
+            }
+            throw "Packaged desktop smoke test failed with exit code $($process.ExitCode)"
           }
       - name: Include user-facing documentation
         shell: pwsh
