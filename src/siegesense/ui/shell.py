@@ -749,10 +749,84 @@ class MainWindow(QMainWindow):
         delete_annotation_button = QPushButton("Delete selected annotation")
         delete_annotation_button.clicked.connect(self._delete_selected_annotation)
         history_layout.addWidget(delete_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
+        history_layout.addWidget(QLabel("Link selected annotation to a Session Review"))
+        self.annotation_session_combo = QComboBox()
+        self.annotation_session_combo.setPlaceholderText("Choose a real review session")
+        history_layout.addWidget(self.annotation_session_combo)
+        link_annotation_button = QPushButton("Add annotation to selected session")
+        link_annotation_button.clicked.connect(self._link_annotation_to_session)
+        history_layout.addWidget(link_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
         page_layout.addWidget(history_panel)
         self._annotation_store: AnnotationStore | None = None
         self._annotation_manifest: dict | None = None
         self._annotation_manifest_path: Path | None = None
+        self._refresh_annotation_sessions()
+
+    def _refresh_annotation_sessions(self) -> None:
+        if not hasattr(self, "annotation_session_combo"):
+            return
+        current_id = self.annotation_session_combo.currentData()
+        self.annotation_session_combo.blockSignals(True)
+        self.annotation_session_combo.clear()
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+        except (OSError, RuntimeError, sqlite3.Error) as error:
+            self.annotation_status.setText(f"Could not load review sessions: {error}")
+            sessions = []
+        for session in sessions:
+            self.annotation_session_combo.addItem(session.title, session.id)
+        index = self.annotation_session_combo.findData(current_id)
+        if index >= 0:
+            self.annotation_session_combo.setCurrentIndex(index)
+        self.annotation_session_combo.blockSignals(False)
+        if not sessions:
+            self.annotation_session_combo.setPlaceholderText("Create a session in Session Review first")
+
+    def _link_annotation_to_session(self) -> None:
+        if self._annotation_store is None:
+            self.annotation_status.setText("Load a valid sampling manifest first.")
+            return
+        history_item = self.annotation_history_list.currentItem()
+        if history_item is None:
+            self.annotation_status.setText("Select a saved annotation to link.")
+            return
+        session_id = self.annotation_session_combo.currentData()
+        if not session_id or self.session_service is None:
+            self.annotation_status.setText("Create a real session in Session Review first.")
+            return
+        annotation_id = history_item.data(Qt.ItemDataRole.UserRole)
+        annotation = next(
+            (entry for entry in self._annotation_store.annotations if entry.annotation_id == annotation_id),
+            None,
+        )
+        if annotation is None:
+            self.annotation_status.setText("Selected annotation no longer exists.")
+            self._refresh_annotation_history()
+            return
+        label = annotation.label.replace("_", " ")
+        note = f" — {annotation.note}" if annotation.note else ""
+        text = f"Clip annotation: {label}{note} [frame: {annotation.frame_filename}]"
+        kind = (
+            ObservationKind.MOVEMENT
+            if annotation.label in {"movement_start", "movement_stop"}
+            else ObservationKind.AIM
+        )
+        try:
+            self.session_service.add_observation(
+                session_id,
+                annotation.timestamp_ms,
+                text,
+                kind=kind,
+                tags=("clip-annotation", annotation.label),
+            )
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.annotation_status.setText(f"Could not link annotation: {error}")
+            return
+        self.annotation_status.setText(
+            f"Added {label} at {annotation.timestamp_ms / 1000:.2f}s to Session Review."
+        )
+        self._refresh_review_sessions(select_id=session_id)
+        self.show_page("Session Review")
 
     def _browse_annotation_manifest(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
