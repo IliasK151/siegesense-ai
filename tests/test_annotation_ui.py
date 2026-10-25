@@ -185,6 +185,7 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
             window.review_session_combo.findData(session.id)
         )
         window.observation_list.setCurrentRow(0)
+        window._annotation_store = None
         window._open_linked_annotation_frame()
         assert "matching sampling manifest" in window.review_status.text().lower()
     finally:
