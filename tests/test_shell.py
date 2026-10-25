@@ -32,7 +32,8 @@ def test_navigation_updates_selected_page_and_breadcrumb() -> None:
     window.close()
 
 
-def test_data_mode_badge_does_not_mislabel_real_records_as_demo(app: QApplication) -> None:
+def test_data_mode_badge_does_not_mislabel_real_records_as_demo() -> None:
+    _application()
     window = MainWindow()
     try:
         assert window.data_mode_badge.text() == "LOCAL DATA · DEMO RECORDS HIDDEN"
