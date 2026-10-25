@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
-from statistics import median
 from pathlib import Path
+from statistics import median
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QPixmap
