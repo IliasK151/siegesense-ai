@@ -158,10 +158,54 @@ class Database:
             measured_at=r["measured_at"]) for r in rows]
 
     def add_settings_snapshot(self, snapshot: SettingsSnapshot) -> None:
+        """Persist a settings snapshot as deterministic JSON."""
         with self._connection:
-            self._connection.execute("INSERT INTO settings_snapshots VALUES (?, ?, ?, ?, ?)",
-                (snapshot.id, snapshot.label, json.dumps(snapshot.values, sort_keys=True),
-                 snapshot.created_at, int(snapshot.is_demo)))
+            self._connection.execute(
+                "INSERT INTO settings_snapshots VALUES (?, ?, ?, ?, ?)",
+                (
+                    snapshot.id,
+                    snapshot.label,
+                    json.dumps(snapshot.values, sort_keys=True, allow_nan=False),
+                    snapshot.created_at,
+                    int(snapshot.is_demo),
+                ),
+            )
+
+    def get_settings_snapshot(self, snapshot_id: str) -> SettingsSnapshot | None:
+        """Fetch a settings snapshot by identifier."""
+        row = self._connection.execute(
+            "SELECT * FROM settings_snapshots WHERE id = ?", (snapshot_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        return SettingsSnapshot(
+            id=row["id"],
+            label=row["label"],
+            values=json.loads(row["values_json"]),
+            created_at=row["created_at"],
+            is_demo=bool(row["is_demo"]),
+        )
+
+    def list_settings_snapshots(
+        self, *, include_demo: bool = False
+    ) -> list[SettingsSnapshot]:
+        """List snapshots newest-first, excluding demo data by default."""
+        sql = (
+            "SELECT * FROM settings_snapshots"
+            if include_demo
+            else "SELECT * FROM settings_snapshots WHERE is_demo = 0"
+        )
+        rows = self._connection.execute(sql + " ORDER BY created_at DESC").fetchall()
+        return [
+            SettingsSnapshot(
+                id=row["id"],
+                label=row["label"],
+                values=json.loads(row["values_json"]),
+                created_at=row["created_at"],
+                is_demo=bool(row["is_demo"]),
+            )
+            for row in rows
+        ]
 
     def add_experiment(self, experiment: SettingsExperiment) -> None:
         baseline = self._connection.execute("SELECT is_demo FROM settings_snapshots WHERE id = ?",
