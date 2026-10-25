@@ -759,8 +759,26 @@ class MainWindow(QMainWindow):
         for experiment in experiments:
             baseline = next((s.label for s in snapshots if s.id == experiment.baseline_snapshot_id), "Missing baseline")
             test = next((s.label for s in snapshots if s.id == experiment.test_snapshot_id), "Not selected")
+            baseline_snapshot = next(
+                (snapshot for snapshot in snapshots if snapshot.id == experiment.baseline_snapshot_id),
+                None,
+            )
+            test_snapshot = next(
+                (snapshot for snapshot in snapshots if snapshot.id == experiment.test_snapshot_id),
+                None,
+            )
+            if baseline_snapshot is not None and test_snapshot is not None:
+                setting_keys = set(baseline_snapshot.values) | set(test_snapshot.values)
+                difference_count = sum(
+                    baseline_snapshot.values.get(key) != test_snapshot.values.get(key)
+                    for key in setting_keys
+                )
+                comparison = f"{difference_count} setting change(s)"
+            else:
+                comparison = "comparison not configured"
             item = QListWidgetItem(
-                f"{experiment.title}  ·  {experiment.status.title()}  ·  {baseline} → {test}"
+                f"{experiment.title}  ·  {experiment.status.title()}  ·  "
+                f"{baseline} → {test}  ·  {comparison}"
             )
             item.setData(Qt.ItemDataRole.UserRole, experiment.id)
             self.settings_experiment_list.addItem(item)
