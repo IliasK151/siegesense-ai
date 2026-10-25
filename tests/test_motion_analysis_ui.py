@@ -34,6 +34,11 @@ def test_annotation_lab_exports_motion_report_locally(
             lambda path: SimpleNamespace(
                 median_motion_px_per_sample=2.0,
                 p90_motion_px_per_sample=4.0,
+                eligible_pair_count=12,
+                analyzed_pair_count=10,
+                subsampled_pair_count=2,
+                unusable_pair_count=1,
+                skipped_gap_pair_count=3,
                 pairs=(SimpleNamespace(coherent_feature_ratio=0.75),),
             ),
         )
@@ -47,6 +52,9 @@ def test_annotation_lab_exports_motion_report_locally(
         assert "Median visible-feature motion: 2.00" in window.annotation_status.text()
         assert "not mouse input" in window.annotation_status.text()
         assert "coherent-feature ratio: 75%" in window.annotation_status.text()
+        assert "Analyzed 10/12 eligible pairs" in window.annotation_status.text()
+        assert "subsampled: 2" in window.annotation_status.text()
+        assert "timestamp-gap pairs excluded: 3" in window.annotation_status.text()
     finally:
         window.close()
         database.close()
