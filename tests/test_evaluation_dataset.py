@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from siegesense.vision.report import main as report_main
 from siegesense.vision.evaluation import (
     compare_annotators,
     summarize_datasets,
@@ -139,3 +140,33 @@ def test_write_evaluation_report_includes_reviewer_agreement(tmp_path: Path) -> 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["annotator_agreement"][0]["overlapping_frames"] == 4
     assert report["annotator_agreement"][0]["exact_agreement"] == 3
+
+
+
+def test_report_cli_writes_report_for_named_dataset(tmp_path: Path, capsys) -> None:
+    dataset = make_dataset(tmp_path / "labels.json", "source-a", ["ambiguous"])
+    output = tmp_path / "report.json"
+    result = report_main([
+        "--dataset", f"heldout={dataset}",
+        "--output", str(output),
+    ])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert output.is_file()
+    assert "does not measure model performance" in captured.out
+    assert json.loads(output.read_text(encoding="utf-8"))["datasets"][0]["dataset_name"] == "heldout"
+
+
+def test_report_cli_requires_a_dataset(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as error:
+        report_main(["--output", str(tmp_path / "report.json")])
+    assert error.value.code == 2
+
+
+def test_report_cli_returns_error_for_invalid_dataset(tmp_path: Path, capsys) -> None:
+    result = report_main([
+        "--dataset", f"missing={tmp_path / 'missing.json'}",
+        "--output", str(tmp_path / "report.json"),
+    ])
+    assert result == 2
+    assert "Evaluation report failed" in capsys.readouterr().err
