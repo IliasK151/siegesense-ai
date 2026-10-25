@@ -74,6 +74,8 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
     if not isinstance(raw_annotations, list):
         raise ValueError("Annotation dataset annotations must be a list")
 
+    if any(not isinstance(item, dict) for item in raw_annotations):
+        raise ValueError("Each annotation entry must be an object")
     annotations = tuple(FrameAnnotation(**item) for item in raw_annotations)
     seen_ids: set[str] = set()
     for annotation in annotations:
@@ -105,11 +107,11 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
 
 
 def _validate_annotation_fields(timestamp_ms: int, label: str, annotator: str) -> None:
-    if timestamp_ms < 0:
-        raise ValueError("Annotation timestamp must be zero or greater")
-    if label not in ALLOWED_LABELS:
+    if isinstance(timestamp_ms, bool) or not isinstance(timestamp_ms, int) or timestamp_ms < 0:
+        raise ValueError("Annotation timestamp must be an integer zero or greater")
+    if not isinstance(label, str) or label not in ALLOWED_LABELS:
         raise ValueError(f"Unsupported annotation label: {label}")
-    if not annotator.strip():
+    if not isinstance(annotator, str) or not annotator.strip():
         raise ValueError("Annotator name cannot be empty")
 
 
