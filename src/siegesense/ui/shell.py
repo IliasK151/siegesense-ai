@@ -210,6 +210,10 @@ class MainWindow(QMainWindow):
             self._build_session_review(page_layout)
         elif name == "Settings Lab":
             self._build_settings_lab(page_layout)
+        elif name == "AI Coach":
+            self._build_ai_coach(page_layout)
+        elif name in {"Aim Lab", "Movement"}:
+            self._build_category_review(page_layout, name)
         elif name == "Overview":
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
@@ -291,6 +295,133 @@ class MainWindow(QMainWindow):
 
         page_layout.addStretch(1)
         return page
+
+    def _build_category_review(self, page_layout: QVBoxLayout, page_name: str) -> None:
+        """Show evidence from manually tagged observations for a single category."""
+        category = "aim" if page_name == "Aim Lab" else "movement"
+        description = (
+            "Review notes tagged as aim. These are manual observations, not automated aim tracking."
+            if category == "aim"
+            else "Review notes tagged as movement. These are manual observations, not automated movement tracking."
+        )
+        page_layout.addWidget(panel("What this page measures", description))
+        self.category_observation_list = QListWidget()
+        self.category_observation_list.setMinimumHeight(240)
+        page_layout.addWidget(self.category_observation_list, 1)
+        refresh = QPushButton("Refresh from saved sessions")
+        refresh.clicked.connect(lambda: self._refresh_category_review(category))
+        page_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
+        self._refresh_category_review(category)
+
+    def _refresh_category_review(self, category: str) -> None:
+        if not hasattr(self, "category_observation_list"):
+            return
+        self.category_observation_list.clear()
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+            records = [
+                (session, observation)
+                for session in sessions
+                for observation in (
+                    self.session_service.list_observations(session.id)
+                    if self.session_service is not None
+                    else []
+                )
+                if observation.kind.value == category
+            ]
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.category_observation_list.addItem(f"Could not load saved observations: {error}")
+            return
+        records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
+        if not records:
+            self.category_observation_list.addItem(
+                f"No {category} observations yet. Add one in Session Review to build a useful review history."
+            )
+            return
+        self.category_observation_list.addItem(f"{len(records)} manually logged {category} observation(s)")
+        for session, observation in records:
+            seconds = observation.timestamp_ms // 1000
+            timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            self.category_observation_list.addItem(
+                f"{session.title}  ·  {timestamp}  ·  {observation.text}"
+            )
+
+    def _build_ai_coach(self, page_layout: QVBoxLayout) -> None:
+        """Build transparent, rules-based review prompts from saved manual notes."""
+        page_layout.addWidget(
+            panel(
+                "Coaching status",
+                "This is an evidence-linked review assistant, not a trained AI model or automatic gameplay detector. "
+                "It only summarises the notes you have saved locally.",
+            )
+        )
+        refresh = QPushButton("Refresh coaching summary")
+        refresh.clicked.connect(self._refresh_ai_coach)
+        page_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
+        self.coach_summary_panel = QFrame()
+        self.coach_summary_panel.setObjectName("Panel")
+        coach_layout = QVBoxLayout(self.coach_summary_panel)
+        coach_layout.setContentsMargins(18, 16, 18, 18)
+        coach_layout.setSpacing(10)
+        coach_layout.addWidget(QLabel("Review prompts"))
+        self.coach_prompt_list = QListWidget()
+        self.coach_prompt_list.setMinimumHeight(180)
+        coach_layout.addWidget(self.coach_prompt_list)
+        coach_layout.addWidget(QLabel("Recent evidence"))
+        self.coach_evidence_list = QListWidget()
+        self.coach_evidence_list.setMinimumHeight(180)
+        coach_layout.addWidget(self.coach_evidence_list)
+        page_layout.addWidget(self.coach_summary_panel, 1)
+        self._refresh_ai_coach()
+
+    def _refresh_ai_coach(self) -> None:
+        if not hasattr(self, "coach_prompt_list"):
+            return
+        self.coach_prompt_list.clear()
+        self.coach_evidence_list.clear()
+        try:
+            sessions = self.session_service.list_sessions() if self.session_service else []
+            records = [
+                (session, observation)
+                for session in sessions
+                for observation in (
+                    self.session_service.list_observations(session.id)
+                    if self.session_service is not None
+                    else []
+                )
+            ]
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.coach_prompt_list.addItem(f"Local review data is unavailable: {error}")
+            return
+        if not records:
+            self.coach_prompt_list.addItem(
+                "Start with one recorded match and add a few timestamped notes in Session Review."
+            )
+            self.coach_evidence_list.addItem("No real-session observations are available yet.")
+            return
+
+        counts: dict[str, int] = {}
+        for _session, observation in records:
+            counts[observation.kind.value] = counts.get(observation.kind.value, 0) + 1
+        prompts = {
+            "aim": "Aim: revisit the logged moments and separate initial placement, first-shot timing, and target-transition control before changing sensitivity.",
+            "movement": "Movement: replay the logged moments and check whether movement timing, exposure, or crosshair placement was the issue.",
+            "positioning": "Positioning: review available cover, escape options, and the angle you chose before the engagement.",
+            "decision": "Decision-making: note the information available at the time and compare it with the decision you made.",
+            "other": "Other: clarify the observation into one specific behaviour you can check in another review.",
+        }
+        for category, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
+            self.coach_prompt_list.addItem(f"{category.title()} · {count} note(s) — {prompts[category]}")
+        self.coach_prompt_list.addItem(
+            "These prompts are transparent rules based on note categories, not proof of a weakness or an automatic diagnosis."
+        )
+        records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
+        for session, observation in records[:10]:
+            seconds = observation.timestamp_ms // 1000
+            timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            self.coach_evidence_list.addItem(
+                f"{session.title} · {timestamp} · {observation.kind.value.title()} · {observation.text}"
+            )
 
     def _refresh_overview(self) -> None:
         """Refresh overview counts and review focus from real local records only."""
