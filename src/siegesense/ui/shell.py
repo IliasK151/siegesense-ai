@@ -40,6 +40,7 @@ from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames
+from siegesense.vision.frame_sampling import sample_video_frames
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -649,7 +650,42 @@ class MainWindow(QMainWindow):
         source_layout = QVBoxLayout(source_panel)
         source_layout.setContentsMargins(18, 16, 18, 18)
         source_layout.setSpacing(10)
-        source_layout.addWidget(QLabel("Open a sampled-video manifest"))
+        source_layout.addWidget(QLabel("Sample a local recording"))
+        self.annotation_video_input = QLineEdit()
+        self.annotation_video_input.setPlaceholderText("Choose a gameplay recording")
+        video_row = QHBoxLayout()
+        video_row.addWidget(self.annotation_video_input, 1)
+        browse_video = QPushButton("Browse video…")
+        browse_video.clicked.connect(self._browse_annotation_video)
+        video_row.addWidget(browse_video)
+        source_layout.addLayout(video_row)
+
+        self.annotation_output_input = QLineEdit()
+        self.annotation_output_input.setPlaceholderText("Choose an empty output folder for sampled frames")
+        output_row = QHBoxLayout()
+        output_row.addWidget(self.annotation_output_input, 1)
+        browse_output = QPushButton("Output folder…")
+        browse_output.clicked.connect(self._browse_annotation_output)
+        output_row.addWidget(browse_output)
+        source_layout.addLayout(output_row)
+
+        sampling_row = QHBoxLayout()
+        sampling_row.addWidget(QLabel("Sampling interval (ms)"))
+        self.annotation_interval_spin = QSpinBox()
+        self.annotation_interval_spin.setRange(50, 10000)
+        self.annotation_interval_spin.setSingleStep(50)
+        self.annotation_interval_spin.setValue(100)
+        self.annotation_interval_spin.setToolTip(
+            "Shorter intervals create more images. This is for manual review, not precise flick timing."
+        )
+        sampling_row.addWidget(self.annotation_interval_spin)
+        sample_button = QPushButton("Sample frames")
+        sample_button.clicked.connect(self._sample_annotation_video)
+        sampling_row.addWidget(sample_button)
+        sampling_row.addStretch(1)
+        source_layout.addLayout(sampling_row)
+
+        source_layout.addWidget(QLabel("Or open an existing sampled-video manifest"))
         source_row = QHBoxLayout()
         self.annotation_manifest_input = QLineEdit()
         self.annotation_manifest_input.setPlaceholderText("Choose sampling_manifest.json")
@@ -883,6 +919,51 @@ class MainWindow(QMainWindow):
         )
         self._refresh_review_sessions(select_id=session_id)
         self.show_page("Session Review")
+
+    def _browse_annotation_video(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select gameplay recording",
+            "",
+            "Video files (*.mp4 *.mkv *.mov *.avi *.webm);;All files (*)",
+        )
+        if path:
+            self.annotation_video_input.setText(path)
+            if not self.annotation_output_input.text().strip():
+                source = Path(path)
+                self.annotation_output_input.setText(str(source.parent / f"{source.stem}_frames"))
+
+    def _browse_annotation_output(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "Choose output folder")
+        if path:
+            self.annotation_output_input.setText(path)
+
+    def _sample_annotation_video(self) -> None:
+        source = self.annotation_video_input.text().strip()
+        output = self.annotation_output_input.text().strip()
+        if not source:
+            self.annotation_status.setText("Choose a gameplay recording first.")
+            return
+        if not output:
+            self.annotation_status.setText("Choose an output folder for sampled frames.")
+            return
+        try:
+            report = sample_video_frames(
+                source,
+                output,
+                interval_ms=self.annotation_interval_spin.value(),
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            self.annotation_status.setText(f"Frame sampling failed: {error}")
+            return
+        manifest_path = Path(output).expanduser().resolve() / "sampling_manifest.json"
+        self.annotation_manifest_input.setText(str(manifest_path))
+        self._load_annotation_manifest()
+        if self._annotation_store is not None:
+            self.annotation_status.setText(
+                f"Sampled {len(report.frames)} frame(s) at {report.interval_ms} ms intervals. "
+                "Frames remain local. Labels are manual; this is not automatic aim detection."
+            )
 
     def _browse_annotation_manifest(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
