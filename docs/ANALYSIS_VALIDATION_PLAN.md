@@ -87,3 +87,20 @@ The human-label definitions and review protocol are in [ANNOTATION_GUIDE.md](ANN
 ## Local evaluation report export
 
 `write_evaluation_report(output_path, datasets, annotator_pairs=...)` writes a versioned local JSON report containing label coverage, reviewer agreement for overlapping frames, generation time, and explicit limitations. The helper refuses to overwrite any annotation dataset passed as an input. It explicitly marks `model_performance_evaluated` as false: this report is about annotation readiness, not detector accuracy.
+
+
+### Run the local evaluation report CLI
+
+After installing the project in editable mode, create a coverage report for a named dataset:
+
+```bash
+python -m siegesense.vision.report --dataset heldout=path/to/annotations.json --output path/to/evaluation-report.json
+```
+
+To include an independently annotated subset, add a reviewer-pair argument (both files must identify the same source recording and share labelled frame keys):
+
+```bash
+python -m siegesense.vision.report --dataset heldout=path/to/annotations.json --agreement double_review=path/to/reviewer-a.json,path/to/reviewer-b.json --output path/to/evaluation-report.json
+```
+
+Repeat `--dataset NAME=PATH` for distinct recording-level splits. The command exits with a non-zero status on invalid inputs and never claims model performance.
