@@ -29,7 +29,8 @@ def render_session_summary(session: Session, observations: list[Observation]) ->
         for observation in ordered:
             seconds = observation.timestamp_ms // 1000
             timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
-            lines.append(f"- **{timestamp} · {observation.kind.value.title()}** — {observation.text}")
+            tag_suffix = f" · Tags: {', '.join(observation.tags)}" if observation.tags else ""
+            lines.append(f"- **{timestamp} · {observation.kind.value.title()}** — {observation.text}{tag_suffix}")
     lines.extend(
         [
             "",
