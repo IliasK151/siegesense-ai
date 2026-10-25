@@ -75,3 +75,16 @@ Qt UI updates must occur on the GUI thread. If global shortcuts are implemented,
 - UI smoke tests for navigation and startup.
 - Lint/type checks added as the codebase stabilises.
 - Pull requests include verification evidence and note known limitations.
+
+
+## Implemented foundation snapshot
+
+The initial domain/storage increment now provides:
+- Immutable typed records for sessions, observations, metric results, settings snapshots, and experiments.
+- SQLite schema version 1 with foreign keys and migration metadata.
+- Repository methods that exclude demo records by default.
+- Validation that observations and metrics match the parent session's demo provenance.
+- Metric provenance fields (source, method, unit, validity) and nullable values for missing measurements.
+- Local data path resolution without creating files during module import.
+
+This is the first persistence increment, not yet a migration/import of the older JSON data. Before connecting it to the UI, add explicit backup/import tooling and additional migration-failure tests.
