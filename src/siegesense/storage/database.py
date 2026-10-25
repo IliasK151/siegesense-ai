@@ -196,7 +196,7 @@ class Database:
             if include_demo
             else "SELECT * FROM settings_snapshots WHERE is_demo = 0"
         )
-        rows = self._connection.execute(sql + " ORDER BY created_at DESC").fetchall()
+        rows = self._connection.execute(sql + " ORDER BY created_at DESC, rowid DESC").fetchall()
         return [
             SettingsSnapshot(
                 id=row["id"],
