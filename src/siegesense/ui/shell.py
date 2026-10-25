@@ -1399,7 +1399,9 @@ class MainWindow(QMainWindow):
             if baseline_snapshot is not None and test_snapshot is not None:
                 setting_keys = set(baseline_snapshot.values) | set(test_snapshot.values)
                 difference_count = sum(
-                    baseline_snapshot.values.get(key) != test_snapshot.values.get(key)
+                    key not in baseline_snapshot.values
+                    or key not in test_snapshot.values
+                    or baseline_snapshot.values[key] != test_snapshot.values[key]
                     for key in setting_keys
                 )
                 comparison = f"{difference_count} setting change(s)"
@@ -1459,7 +1461,9 @@ class MainWindow(QMainWindow):
         differences = [
             (key, baseline.values.get(key, "—"), test.values.get(key, "—"))
             for key in keys
-            if baseline.values.get(key) != test.values.get(key)
+            if key not in baseline.values
+            or key not in test.values
+            or baseline.values[key] != test.values[key]
         ]
         if not differences:
             self.settings_comparison_label.setText(
