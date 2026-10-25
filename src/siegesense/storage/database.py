@@ -228,6 +228,40 @@ class Database:
                  experiment.changed_variable, experiment.test_snapshot_id, experiment.outcome, experiment.notes,
                  experiment.status, experiment.created_at, int(experiment.is_demo)))
 
+    def update_experiment(
+        self,
+        experiment_id: str,
+        *,
+        status: str,
+        outcome: str | None = None,
+        notes: str | None = None,
+    ) -> SettingsExperiment:
+        """Update the recorded result of an existing settings experiment."""
+        row = self._connection.execute(
+            "SELECT * FROM settings_experiments WHERE id = ?", (experiment_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Settings experiment does not exist")
+        experiment = SettingsExperiment(
+            id=row["id"],
+            title=row["title"],
+            hypothesis=row["hypothesis"],
+            baseline_snapshot_id=row["baseline_snapshot_id"],
+            changed_variable=row["changed_variable"],
+            test_snapshot_id=row["test_snapshot_id"],
+            outcome=outcome if outcome is not None else row["outcome"],
+            notes=notes if notes is not None else row["notes"],
+            status=status,
+            created_at=row["created_at"],
+            is_demo=bool(row["is_demo"]),
+        )
+        with self._connection:
+            self._connection.execute(
+                "UPDATE settings_experiments SET status = ?, outcome = ?, notes = ? WHERE id = ?",
+                (experiment.status, experiment.outcome, experiment.notes, experiment.id),
+            )
+        return experiment
+
     def list_experiments(self, *, include_demo: bool = False) -> list[SettingsExperiment]:
         sql = "SELECT * FROM settings_experiments" if include_demo else "SELECT * FROM settings_experiments WHERE is_demo = 0"
         rows = self._connection.execute(sql + " ORDER BY created_at DESC").fetchall()
