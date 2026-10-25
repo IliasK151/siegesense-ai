@@ -108,3 +108,32 @@ def test_sampling_rejects_non_integer_timing_values(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="integer"):
         sample_video_frames(source, tmp_path / "bool-start", start_ms=True,
                             capture_factory=FakeCaptureFactory)
+
+
+
+def test_manifest_keeps_requested_and_reported_positions_distinct(tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"fake source recording")
+
+    class OffsetPositionCapture(FakeCapture):
+        def get(self, prop: int) -> float:
+            if prop == 0:
+                return float(self.position_ms + 20)
+            return super().get(prop)
+
+    class OffsetPositionFactory:
+        @staticmethod
+        def write_image(path: str, _frame: object) -> bool:
+            Path(path).write_bytes(b"fake-frame")
+            return True
+
+        def __new__(cls, _path: str) -> OffsetPositionCapture:
+            return OffsetPositionCapture(_path)
+
+    report = sample_video_frames(
+        source, tmp_path / "frames", start_ms=100, end_ms=300,
+        interval_ms=100, capture_factory=OffsetPositionFactory,
+    )
+
+    assert [frame.timestamp_ms for frame in report.frames] == [100, 200]
+    assert [frame.reported_position_ms for frame in report.frames] == [120.0, 220.0]
