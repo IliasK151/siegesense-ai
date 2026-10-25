@@ -726,7 +726,11 @@ class MainWindow(QMainWindow):
         history_layout.addWidget(QLabel("Saved annotations"))
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
+        self.annotation_history_list.currentItemChanged.connect(self._on_annotation_history_selected)
         history_layout.addWidget(self.annotation_history_list)
+        edit_annotation_button = QPushButton("Update selected annotation")
+        edit_annotation_button.clicked.connect(self._update_selected_annotation)
+        history_layout.addWidget(edit_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
         delete_annotation_button = QPushButton("Delete selected annotation")
         delete_annotation_button.clicked.connect(self._delete_selected_annotation)
         history_layout.addWidget(delete_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
@@ -859,6 +863,63 @@ class MainWindow(QMainWindow):
             )
             item.setData(Qt.ItemDataRole.UserRole, annotation.annotation_id)
             self.annotation_history_list.addItem(item)
+
+    def _on_annotation_history_selected(self, item: QListWidgetItem | None, _previous=None) -> None:
+        if item is None or self._annotation_store is None:
+            return
+        annotation_id = item.data(Qt.ItemDataRole.UserRole)
+        annotation = next(
+            (entry for entry in self._annotation_store.annotations if entry.annotation_id == annotation_id),
+            None,
+        )
+        if annotation is None:
+            return
+        self.annotation_annotator_input.setText(annotation.annotator)
+        self.annotation_note_input.setText(annotation.note)
+        label_index = self.annotation_label_combo.findData(annotation.label)
+        if label_index >= 0:
+            self.annotation_label_combo.setCurrentIndex(label_index)
+        for index in range(self.annotation_frame_list.count()):
+            frame_item = self.annotation_frame_list.item(index)
+            if frame_item.data(Qt.ItemDataRole.UserRole) == (
+                annotation.timestamp_ms,
+                annotation.frame_filename,
+            ):
+                self.annotation_frame_list.setCurrentRow(index)
+                break
+        self.annotation_status.setText(
+            f"Editing label for {annotation.timestamp_ms / 1000:.2f}s. "
+            "Change the fields above and select Update selected annotation."
+        )
+
+    def _update_selected_annotation(self) -> None:
+        if self._annotation_store is None:
+            self.annotation_status.setText("Load a valid sampling manifest first.")
+            return
+        item = self.annotation_history_list.currentItem()
+        if item is None:
+            self.annotation_status.setText("Select a saved annotation to update.")
+            return
+        annotation_id = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            updated = self._annotation_store.update(
+                annotation_id,
+                label=self.annotation_label_combo.currentData(),
+                annotator=self.annotation_annotator_input.text(),
+                note=self.annotation_note_input.text(),
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            self.annotation_status.setText(f"Annotation not updated: {error}")
+            return
+        self._refresh_annotation_history()
+        for index in range(self.annotation_history_list.count()):
+            history_item = self.annotation_history_list.item(index)
+            if history_item.data(Qt.ItemDataRole.UserRole) == updated.annotation_id:
+                self.annotation_history_list.setCurrentRow(index)
+                break
+        self.annotation_status.setText(
+            f"Updated annotation at {updated.timestamp_ms / 1000:.2f}s."
+        )
 
     def _delete_selected_annotation(self) -> None:
         if self._annotation_store is None:
