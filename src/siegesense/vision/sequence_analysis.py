@@ -92,15 +92,18 @@ def summarize_annotated_sequences(
             previous_timestamp = item.timestamp_ms
         if current:
             runs.append(current)
-        spans = [
-            (run[-1] - run[0]) if len(run) > 1 else 0
-            for run in runs
-        ]
+        spans = (
+            [(run[-1] - run[0]) if len(run) > 1 else 0 for run in runs]
+            if sampling_interval_ms is not None
+            else None
+        )
         return LabelRunSummary(
             label=target_label,
             run_count=len(runs),
             total_frames_in_runs=sum(len(run) for run in runs),
-            median_observed_span_ms=statistics.median(spans) if spans else None,
+            median_observed_span_ms=(
+                statistics.median(spans) if spans else None
+            ) if spans is not None else None,
             longest_observed_span_ms=max(spans) if spans else None,
         )
 
