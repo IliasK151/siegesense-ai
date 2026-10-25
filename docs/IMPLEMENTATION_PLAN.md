@@ -12,6 +12,7 @@ The target is a local-first Rainbow Six Siege review and coaching desktop app th
 
 - [x] Add a startup smoke-test mode that initializes Qt, the navigation shell, and the local database without entering the normal event loop.
 - [x] Run the packaged Windows executable in offscreen smoke-test mode during the Windows package workflow.
+- [x] Capture a traceback to a temporary diagnostic file when the packaged smoke test fails, so windowed builds can be debugged without a console.
 - [x] Add a source-entry-point subprocess smoke test.
 - [x] Document what the package smoke test proves and what it does not prove.
 - [ ] Confirm latest quality checks and Windows package workflow pass on the same commit.
