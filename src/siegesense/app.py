@@ -16,7 +16,9 @@ from siegesense.ui.theme import APP_STYLESHEET
 
 def main() -> int:
     """Create the desktop application and manage its local database lifecycle."""
-    app = QApplication(sys.argv)
+    smoke_test = "--smoke-test" in sys.argv
+    qt_args = [argument for argument in sys.argv if argument != "--smoke-test"]
+    app = QApplication(qt_args)
     app.setApplicationName("SiegeSense AI")
     app.setOrganizationName("SiegeSense")
     app.setStyle("Fusion")
@@ -39,5 +41,26 @@ def main() -> int:
         session_service=session_service,
         settings_service=SettingsService(database),
     )
+    if smoke_test:
+        try:
+            expected_pages = {
+                "Overview",
+                "Aim Lab",
+                "Movement",
+                "Settings Lab",
+                "Session Review",
+                "Clip Annotation",
+                "AI Coach",
+                "Preferences & Privacy",
+            }
+            if set(window._nav_buttons) != expected_pages:
+                raise RuntimeError("Desktop navigation smoke test failed")
+            if window.page_stack.count() != len(expected_pages):
+                raise RuntimeError("Desktop page-stack smoke test failed")
+        finally:
+            window.close()
+            database.close()
+        return 0
+
     window.show()
     return app.exec()
