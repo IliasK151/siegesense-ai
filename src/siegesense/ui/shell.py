@@ -1205,7 +1205,9 @@ class MainWindow(QMainWindow):
             longest_text = "n/a" if longest is None else f"{longest} ms"
             sequence_text = (
                 f"consecutive off-target runs: {sequence.off_target_runs.run_count}, "
-                f"longest observed sampled span: {longest_text}"
+                f"longest observed sampled span: {longest_text}, "
+                f"adjacent off→on labels: {sequence.off_to_on_transitions}, "
+                f"adjacent on→off labels: {sequence.on_to_off_transitions}"
             )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
