@@ -81,7 +81,7 @@ Session records support an optional SHA-256 fingerprint for their linked media. 
 
 ## Annotation guide and reviewer agreement
 
-The human-label definitions and review protocol are in [ANNOTATION_GUIDE.md](ANNOTATION_GUIDE.md). The evaluation helper now compares two annotation JSON files on the same source recording and exact overlapping sampled frames, reporting overlap count, exact agreement, observed agreement, and Cohen's kappa when defined. Agreement is not a correctness score; model validation still requires separate held-out recordings and measurable detection metrics.
+The human-label definitions and review protocol are in [ANNOTATION_GUIDE.md](ANNOTATION_GUIDE.md). The evaluation helper now compares two annotation JSON files on the same source recording and exact overlapping sampled frames, reporting overlap count, exact agreement, observed agreement, and Cohen's kappa when defined. It rejects duplicate labels for the same sampled frame within either reviewer dataset instead of silently choosing one. Agreement is not a correctness score; model validation still requires separate held-out recordings and measurable detection metrics.
 
 
 ## Local evaluation report export
