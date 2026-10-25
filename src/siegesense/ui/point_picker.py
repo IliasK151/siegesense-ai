@@ -38,8 +38,10 @@ class PointPickerLabel(QLabel):
     def set_image_message(self, message: str) -> None:
         """Clear the image and present an explanatory message."""
         self._source_pixmap = QPixmap()
-        self.setPixmap(QPixmap())
+        self._reticle_point = None
+        self._target_point = None
         self._marking_mode = None
+        self.setPixmap(QPixmap())
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setText(message)
         self.update()
