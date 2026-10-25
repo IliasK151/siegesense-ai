@@ -56,7 +56,6 @@ def _run_application(smoke_test: bool) -> int:
         )
         return 1
 
-    app.aboutToQuit.connect(database.close)
     try:
         session_service = SessionService(database)
         window = MainWindow(
