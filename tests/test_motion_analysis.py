@@ -97,6 +97,7 @@ def test_motion_analysis_reports_shifted_synthetic_frames(tmp_path: Path) -> Non
     assert report.analyzed_pair_count == 1
     assert report.median_motion_px_per_sample is not None
     assert report.median_motion_px_per_sample > 0
+    assert report.pairs[0].coherent_feature_ratio >= 0.5
     assert any("does not measure mouse input" in item for item in report.limitations)
     target = write_motion_report(report, tmp_path / "motion.json")
     saved = json.loads(target.read_text(encoding="utf-8"))
