@@ -79,3 +79,16 @@ def test_sampling_rejects_missing_recording(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="does not exist"):
         sample_video_frames(tmp_path / "missing.mp4", tmp_path / "frames",
                             capture_factory=FakeCaptureFactory)
+
+
+
+def test_sampling_refuses_to_overwrite_existing_output(tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"fake source recording")
+    output = tmp_path / "frames"
+    output.mkdir()
+    existing = output / "keep.txt"
+    existing.write_text("do not overwrite", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be empty"):
+        sample_video_frames(source, output, capture_factory=FakeCaptureFactory)
+    assert existing.read_text(encoding="utf-8") == "do not overwrite"
