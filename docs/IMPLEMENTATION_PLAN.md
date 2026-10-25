@@ -36,7 +36,9 @@ The target is a local-first Rainbow Six Siege review and coaching desktop app th
 
 ## Slice 3 — Reticle and opponent detection prototype
 
-- Define a human annotation format for reticle center, visible opponent boxes/centers, target visibility, occlusion, and target transitions.
+- [x] Define an annotation format for human-labelled reticle/target centers and optional normalized reticle/target points; opponent boxes, visibility, occlusion, and event timestamps still need additional fields as the detector task is specified.
+- [x] Add aspect-ratio-safe click-to-mark reticle/target points, display saved marks, and persist edits/clears.
+- [ ] Benchmark point-marking consistency between reviewers on shared frames.
 - Build a small local-only, consented, human-reviewed evaluation set from player-owned recordings.
 - Implement candidate detection as an optional, isolated module with confidence values and explicit “unknown/unavailable” output.
 - Visualize detections over sampled frames so false positives and false negatives can be reviewed.
