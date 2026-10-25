@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ def new_id() -> str:
     return str(uuid4())
 
 
-class ObservationKind(StrEnum):
+class ObservationKind(str, Enum):
     AIM = "aim"
     MOVEMENT = "movement"
     POSITIONING = "positioning"
