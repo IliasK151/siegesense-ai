@@ -60,5 +60,11 @@ def test_annotation_workspace_loads_frame_and_persists_label(app: QApplication, 
         assert dataset["annotations"][0]["label"] == "crosshair_off_target"
         assert "crosshair off target" in window.annotation_history_list.item(0).text()
         assert "Saved" in window.annotation_status.text()
+
+        window.annotation_history_list.setCurrentRow(0)
+        window._delete_selected_annotation()
+        assert window.annotation_history_list.count() == 0
+        assert json.loads(dataset_path.read_text(encoding="utf-8"))["annotations"] == []
+        assert "deleted" in window.annotation_status.text().lower()
     finally:
         window.close()
