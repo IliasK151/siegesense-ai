@@ -40,8 +40,8 @@ from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
-from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 from siegesense.vision.frame_sampling import sample_video_frames
+from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
