@@ -109,3 +109,11 @@ Repeat `--dataset NAME=PATH` for distinct recording-level splits. The command ex
 ## Descriptive aim-frame summary
 
 Evaluation reports and the Clip Annotation workspace now include counts of manually labelled crosshair-on-target, crosshair-off-target, target-transition, ambiguous, and unusable frames. When at least one on-target/off-target frame exists, the report includes the on-target share among those selected, determinate labels. This is strictly a summary of frames a human chose to label: it is **not** aim accuracy, hit probability, or a representative estimate of gameplay performance. Sampling strategy and annotator selection can bias this share. Automatic detection and time-to-target measurement remain unimplemented pending higher-resolution clips and validation against reviewed events.
+
+
+
+## Implemented prototype: screen-space motion estimates
+
+`src/siegesense/vision/motion_analysis.py` estimates sparse optical flow between adjacent sampled images from a validated local sampling manifest. It downsizes images so their longest side is at most 640 pixels and reports per-pair median displacement, 90th-percentile feature displacement, tracked feature count, eligible-pair count, skipped timestamp-gap count, and unreadable-pair count. A configurable pair limit bounds runtime; when necessary, eligible pairs are subsampled at a deterministic stride. The Clip Annotation page can export this report to a separate JSON file.
+
+This is a descriptive visual-motion prototype, not a validated aim or movement metric. Camera motion, recoil animation, moving objects, effects, scene changes, and compression can affect estimates. The values are in resized-image pixels per sampled interval; they are not mouse-input measurements, world-space aim, reticle-to-target distance, hit probability, or player skill. Before using the output for coaching, benchmark it against manually reviewed footage across resolutions, frame rates, scopes, and recording conditions. Do not infer that a larger or smaller value is inherently better.
