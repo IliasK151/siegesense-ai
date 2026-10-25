@@ -584,9 +584,16 @@ class MainWindow(QMainWindow):
         timestamp_host = QWidget()
         timestamp_host.setLayout(timestamp_row)
         observation_form.addRow("Timestamp", timestamp_host)
+        self.observation_tags_input = QLineEdit()
+        self.observation_tags_input.setPlaceholderText("Optional comma-separated tags, e.g. overshoot, acog, close-range")
+        self.observation_filter_input = QLineEdit()
+        self.observation_filter_input.setPlaceholderText("Filter notes by text or tag…")
+        self.observation_filter_input.textChanged.connect(self._refresh_observations)
         observation_form.addRow("Category", self.observation_kind)
+        observation_form.addRow("Tags", self.observation_tags_input)
         observation_form.addRow("Observation", self.observation_text)
         review_layout.addLayout(observation_form)
+        review_layout.addWidget(self.observation_filter_input)
         add_note = QPushButton("Add observation")
         add_note.clicked.connect(self._add_review_observation)
         review_layout.addWidget(add_note, 0, Qt.AlignmentFlag.AlignLeft)
@@ -958,13 +965,22 @@ class MainWindow(QMainWindow):
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             self.observation_list.addItem(f"Could not load observations: {error}")
             return
-        if not observations:
-            self.observation_list.addItem("No observations yet. Add the first timestamped note above.")
+        query = self.observation_filter_input.text().strip().casefold() if hasattr(self, "observation_filter_input") else ""
+        visible = [
+            item for item in observations
+            if not query or query in item.text.casefold()
+            or query in item.kind.value.casefold()
+            or any(query in tag.casefold() for tag in item.tags)
+        ]
+        if not visible:
+            message = "No observations yet. Add the first timestamped note above." if not observations else "No observations match this filter."
+            self.observation_list.addItem(message)
             return
-        for item in observations:
+        for item in visible:
             seconds = item.timestamp_ms // 1000
             timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
-            entry = QListWidgetItem(f"{timestamp}  ·  {item.kind.value.title()}  ·  {item.text}")
+            tags = f"  ·  #{', #'.join(item.tags)}" if item.tags else ""
+            entry = QListWidgetItem(f"{timestamp}  ·  {item.kind.value.title()}  ·  {item.text}{tags}")
             entry.setData(Qt.ItemDataRole.UserRole, item.id)
             self.observation_list.addItem(entry)
 
@@ -1008,13 +1024,19 @@ class MainWindow(QMainWindow):
             return
         try:
             kind = ObservationKind(self.observation_kind.currentData())
+            tags = tuple(dict.fromkeys(
+                tag.strip().casefold()
+                for tag in self.observation_tags_input.text().split(",")
+                if tag.strip()
+            ))
             self.session_service.add_observation(
-                session_id, self.observation_timestamp.value() * 1000, text, kind=kind
+                session_id, self.observation_timestamp.value() * 1000, text, kind=kind, tags=tags
             )
         except (OSError, ValueError, RuntimeError) as error:
             QMessageBox.warning(self, "Could not save observation", f"Your observation was not saved.\n\n{error}")
             return
         self.observation_text.clear()
+        self.observation_tags_input.clear()
         self._refresh_observations()
         self.review_status.setText("Observation saved locally.")
         self._refresh_overview()
