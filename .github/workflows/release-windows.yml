@@ -1,0 +1,56 @@
+name: Windows package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install application, vision, and packaging dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,vision]" pyinstaller
+      - name: Run tests and lint
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pytest
+          ruff check .
+      - name: Build Windows application directory
+        run: >
+          pyinstaller --noconfirm --clean --windowed --onedir
+          --name SiegeSenseAI --paths src
+          --collect-submodules siegesense
+          --collect-all PySide6.QtMultimedia
+          --collect-all PySide6.QtMultimediaWidgets
+          main.py
+      - name: Include user-facing documentation
+        shell: pwsh
+        run: |
+          Copy-Item README.md dist/SiegeSenseAI/README.md
+          New-Item -ItemType Directory -Force dist/SiegeSenseAI/docs | Out-Null
+          Copy-Item docs/ANNOTATION_GUIDE.md dist/SiegeSenseAI/docs/
+          Copy-Item docs/ANALYSIS_VALIDATION_PLAN.md dist/SiegeSenseAI/docs/
+          Compress-Archive -Path dist/SiegeSenseAI/* -DestinationPath dist/SiegeSenseAI-Windows-x64.zip -Force
+      - name: Upload Windows package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiegeSenseAI-Windows-x64
+          path: dist/SiegeSenseAI-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
