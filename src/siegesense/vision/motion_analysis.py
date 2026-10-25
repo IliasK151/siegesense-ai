@@ -79,7 +79,7 @@ def analyze_manifest_motion(
             or not entry["filename"].strip()
             or Path(entry["filename"]).name != entry["filename"]
             or "/" in entry["filename"]
-            or "\\\\" in entry["filename"]
+            or "\\" in entry["filename"]
         ):
             raise ValueError("Sampling manifest contains an invalid frame entry")
         validated.append((entry["timestamp_ms"], root / entry["filename"]))
