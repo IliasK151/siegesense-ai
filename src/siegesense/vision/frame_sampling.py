@@ -13,9 +13,11 @@ from typing import Any
 
 @dataclass(frozen=True, slots=True)
 class SampledFrame:
+    # timestamp_ms is the requested seek-grid position, not a verified media PTS.
     timestamp_ms: int
     frame_index: int
     filename: str
+    reported_position_ms: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,10 @@ class SamplingReport:
     end_ms: int
     interval_ms: int
     frames: tuple[SampledFrame, ...]
+    timestamp_policy: str = (
+        "timestamp_ms records requested seek-grid positions; reported_position_ms "
+        "is OpenCV's post-read position and is not guaranteed to be a presentation timestamp"
+    )
     schema_version: int = 1
 
 
@@ -109,15 +115,27 @@ def sample_video_frames(
         samples = []
         for timestamp_ms in range(start_ms, actual_end_ms, interval_ms):
             frame_index = min(frame_count - 1, round(timestamp_ms * fps / 1000))
-            capture.set(prop_msec, timestamp_ms)
+            seek_ok = capture.set(prop_msec, timestamp_ms)
+            if seek_ok is False:
+                raise ValueError(f"Video backend rejected seek to {timestamp_ms} ms")
             ok, frame = capture.read()
             if not ok or frame is None:
-                raise ValueError(f"Could not read frame at {timestamp_ms} ms")
+                raise ValueError(f"Could not read frame at requested {timestamp_ms} ms")
+            reported_position = float(capture.get(prop_msec))
+            if not (reported_position >= 0 and reported_position < float("inf")):
+                reported_position = None
             filename = f"frame_{timestamp_ms:09d}ms.png"
             target = destination / filename
             if not image_writer(str(target), frame):
                 raise OSError(f"Could not write sampled frame: {target}")
-            samples.append(SampledFrame(timestamp_ms, frame_index, filename))
+            samples.append(
+                SampledFrame(
+                    timestamp_ms=timestamp_ms,
+                    frame_index=frame_index,
+                    filename=filename,
+                    reported_position_ms=reported_position,
+                )
+            )
 
         report = SamplingReport(
             source_path=str(source), source_sha256=_sha256(source), source_fps=fps,
