@@ -31,6 +31,8 @@ class SequenceSummary:
     on_target_runs: LabelRunSummary
     movement_start_count: int
     movement_stop_count: int
+    off_to_on_transitions: int | None
+    on_to_off_transitions: int | None
     limitations: tuple[str, ...]
 
 
@@ -114,6 +116,24 @@ def summarize_annotated_sequences(
             for previous, current in zip(annotations, annotations[1:])
         )
 
+    off_to_on_transitions = None
+    on_to_off_transitions = None
+    if sampling_interval_ms is not None:
+        adjacent_pairs = (
+            (previous.label, current.label)
+            for previous, current in zip(annotations, annotations[1:])
+            if current.timestamp_ms - previous.timestamp_ms == sampling_interval_ms
+        )
+        transitions = list(adjacent_pairs)
+        off_to_on_transitions = sum(
+            first == "crosshair_off_target" and second == "crosshair_on_target"
+            for first, second in transitions
+        )
+        on_to_off_transitions = sum(
+            first == "crosshair_on_target" and second == "crosshair_off_target"
+            for first, second in transitions
+        )
+
     limitations = [
         "Labels are human annotations, not automatic predictions.",
         "Observed span runs from first to last sampled frame; it is not precise event duration.",
@@ -132,5 +152,7 @@ def summarize_annotated_sequences(
         on_target_runs=collect_runs("crosshair_on_target"),
         movement_start_count=sum(item.label == "movement_start" for item in annotations),
         movement_stop_count=sum(item.label == "movement_stop" for item in annotations),
+        off_to_on_transitions=off_to_on_transitions,
+        on_to_off_transitions=on_to_off_transitions,
         limitations=tuple(limitations),
     )
