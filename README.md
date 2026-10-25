@@ -4,7 +4,7 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. Automatic vision analysis is not implemented. The Clip Annotation workspace can sample local recordings, label frames, display descriptive summaries, and export a local evaluation report, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and cautious consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
+> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. The app now has an initial, limited screen-space motion estimator for sampled frames using sparse optical flow. It describes visible feature movement only; it does not detect opponents, measure mouse input, or score aim. The Clip Annotation workspace can sample local recordings, label frames, display descriptive summaries, and export local evaluation and motion reports, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
 
 ## Product principles
 
@@ -61,14 +61,14 @@ ruff check .
 
 ## Review a gameplay recording locally
 
-The current annotation workflow is manual and intended to help build a responsibly validated dataset. It does not detect targets or measure aim automatically.
+The annotation labels remain manual. The optional screen-space motion report estimates visible feature movement between adjacent sampled frames, but does not detect targets or measure aim automatically.
 
 1. Launch SiegeSense AI and open **Clip Annotation**.
 2. Choose **Select gameplay video** and select a local recording. Choose an output folder (or use the suggested `<video-name>_frames` folder).
 3. Set the sampling interval and choose **Sample frames**. A shorter interval produces more images and uses more disk space; it does not guarantee precise measurement of a flick or reaction time.
 4. Review the sampled frames and label only what is visible. Use **ambiguous** or **unusable** when the image does not support a confident label. Follow the [annotation guide](docs/ANNOTATION_GUIDE.md).
 5. Save the annotation dataset locally. If you want to link a label to Session Review, select the matching session and use the link action; the app checks recording identity when the available paths/fingerprints permit it.
-6. Use **Export local evaluation report…** to write a JSON summary. The report describes annotation coverage and, if supplied, reviewer agreement. It explicitly does not claim model performance or aim accuracy.
+6. Use **Export local evaluation report…** to write a JSON summary of annotation coverage and, if supplied, reviewer agreement. Optionally choose **Analyze screen-space motion…** to export a second JSON report of visible feature motion between adjacent sampled frames. Motion analysis uses resized images and can be affected by camera movement, recoil animation, moving objects, effects, and compression; it is not mouse input, aim accuracy, or a skill score.
 
 **Keep the evidence honest:** frame labels are human observations, not ground truth for your overall skill. A manually selected on-target share is not accuracy, hit probability, or a representative performance score. Store recordings, sampled frames, annotations, and reports outside version control; they can contain personal information.
 
