@@ -918,6 +918,7 @@ class MainWindow(QMainWindow):
             self._annotation_manifest_path = None
             self.annotation_frame_list.clear()
             self.annotation_history_list.clear()
+            self._refresh_annotation_summary()
             self.annotation_frame_preview.setText("Could not load this manifest.")
             self.annotation_status.setText(f"Manifest not loaded: {error}")
             return
