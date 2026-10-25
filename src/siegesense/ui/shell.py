@@ -821,7 +821,20 @@ class MainWindow(QMainWindow):
             if self._annotation_manifest is not None
             else None
         )
-        if selected_session.media_path and source_path:
+        manifest_sha256 = (
+            self._annotation_manifest.get("source_sha256")
+            if self._annotation_manifest is not None
+            else None
+        )
+        if selected_session.media_sha256 and manifest_sha256:
+            if selected_session.media_sha256 != manifest_sha256:
+                self.annotation_status.setText(
+                    "The recording fingerprint does not match this session. "
+                    "Choose a session linked to the exact same video file."
+                )
+                return
+        elif selected_session.media_path and source_path:
+            # Until both sides have a fingerprint, retain the conservative path check.
             selected_media = Path(selected_session.media_path).expanduser().resolve()
             annotation_media = Path(source_path).expanduser().resolve()
             if selected_media != annotation_media:
