@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QPixmap,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -37,6 +38,7 @@ from siegesense.services.export_service import (
 )
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
+from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -44,6 +46,7 @@ NAV_ITEMS = [
     ("Movement", "↗", "Review movement and positioning"),
     ("Settings Lab", "⚙", "Run deliberate settings experiments"),
     ("Session Review", "▣", "Review recorded footage and observations"),
+    ("Clip Annotation", "✎", "Label sampled frames for future model validation"),
     ("AI Coach", "✳", "Evidence-linked coaching, when available"),
     ("Preferences & Privacy", "☷", "Capture, data, and application preferences"),
 ]
@@ -215,6 +218,8 @@ class MainWindow(QMainWindow):
             self._build_session_review(page_layout)
         elif name == "Settings Lab":
             self._build_settings_lab(page_layout)
+        elif name == "Clip Annotation":
+            self._build_annotation_lab(page_layout)
         elif name == "AI Coach":
             self._build_ai_coach(page_layout)
         elif name in {"Aim Lab", "Movement"}:
@@ -632,6 +637,223 @@ class MainWindow(QMainWindow):
         review_layout.addWidget(export_button, 0, Qt.AlignmentFlag.AlignLeft)
         page_layout.addWidget(review_panel, 1)
         self._refresh_review_sessions()
+
+    def _build_annotation_lab(self, page_layout: QVBoxLayout) -> None:
+        """Build a local-only frame annotation workflow for sampled recordings."""
+        source_panel = QFrame()
+        source_panel.setObjectName("Panel")
+        source_layout = QVBoxLayout(source_panel)
+        source_layout.setContentsMargins(18, 16, 18, 18)
+        source_layout.setSpacing(10)
+        source_layout.addWidget(QLabel("Open a sampled-video manifest"))
+        source_row = QHBoxLayout()
+        self.annotation_manifest_input = QLineEdit()
+        self.annotation_manifest_input.setPlaceholderText("Choose sampling_manifest.json")
+        source_row.addWidget(self.annotation_manifest_input, 1)
+        browse_manifest = QPushButton("Browse…")
+        browse_manifest.clicked.connect(self._browse_annotation_manifest)
+        source_row.addWidget(browse_manifest)
+        source_layout.addLayout(source_row)
+        load_manifest_button = QPushButton("Load frames")
+        load_manifest_button.clicked.connect(self._load_annotation_manifest)
+        source_layout.addWidget(load_manifest_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.annotation_status = QLabel(
+            "Annotations are manual labels stored locally. No video or frames are uploaded."
+        )
+        self.annotation_status.setObjectName("Muted")
+        self.annotation_status.setWordWrap(True)
+        source_layout.addWidget(self.annotation_status)
+        page_layout.addWidget(source_panel)
+
+        review_row = QHBoxLayout()
+        review_row.setSpacing(14)
+        frames_panel = QFrame()
+        frames_panel.setObjectName("Panel")
+        frames_layout = QVBoxLayout(frames_panel)
+        frames_layout.setContentsMargins(14, 14, 14, 14)
+        frames_layout.addWidget(QLabel("Sampled frames"))
+        self.annotation_frame_list = QListWidget()
+        self.annotation_frame_list.currentItemChanged.connect(self._on_annotation_frame_selected)
+        frames_layout.addWidget(self.annotation_frame_list, 1)
+        review_row.addWidget(frames_panel, 1)
+
+        detail_panel = QFrame()
+        detail_panel.setObjectName("Panel")
+        detail_layout = QVBoxLayout(detail_panel)
+        detail_layout.setContentsMargins(14, 14, 14, 14)
+        detail_layout.setSpacing(10)
+        detail_layout.addWidget(QLabel("Frame preview"))
+        self.annotation_frame_preview = QLabel("Load a manifest to preview sampled frames.")
+        self.annotation_frame_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.annotation_frame_preview.setMinimumSize(280, 180)
+        self.annotation_frame_preview.setObjectName("FramePreview")
+        self.annotation_frame_preview.setWordWrap(True)
+        detail_layout.addWidget(self.annotation_frame_preview, 1)
+        self.annotation_frame_metadata = QLabel("No frame selected")
+        self.annotation_frame_metadata.setObjectName("Muted")
+        self.annotation_frame_metadata.setWordWrap(True)
+        detail_layout.addWidget(self.annotation_frame_metadata)
+        annotation_form = QFormLayout()
+        self.annotation_label_combo = QComboBox()
+        label_titles = {
+            "target_transition": "Target transition",
+            "crosshair_on_target": "Crosshair on target",
+            "crosshair_off_target": "Crosshair off target",
+            "movement_start": "Movement start",
+            "movement_stop": "Movement stop",
+            "ambiguous": "Ambiguous",
+            "unusable_frame": "Unusable frame",
+        }
+        for value in sorted(ALLOWED_LABELS):
+            self.annotation_label_combo.addItem(label_titles[value], value)
+        self.annotation_annotator_input = QLineEdit("Player")
+        self.annotation_note_input = QLineEdit()
+        self.annotation_note_input.setPlaceholderText("Optional context for this frame")
+        annotation_form.addRow("Manual label", self.annotation_label_combo)
+        annotation_form.addRow("Annotator", self.annotation_annotator_input)
+        annotation_form.addRow("Note", self.annotation_note_input)
+        detail_layout.addLayout(annotation_form)
+        save_annotation_button = QPushButton("Save annotation")
+        save_annotation_button.clicked.connect(self._save_frame_annotation)
+        detail_layout.addWidget(save_annotation_button, 0, Qt.AlignmentFlag.AlignLeft)
+        review_row.addWidget(detail_panel, 2)
+        page_layout.addLayout(review_row, 2)
+
+        history_panel = QFrame()
+        history_panel.setObjectName("Panel")
+        history_layout = QVBoxLayout(history_panel)
+        history_layout.setContentsMargins(18, 14, 18, 14)
+        history_layout.addWidget(QLabel("Saved annotations"))
+        self.annotation_history_list = QListWidget()
+        self.annotation_history_list.setMaximumHeight(150)
+        history_layout.addWidget(self.annotation_history_list)
+        page_layout.addWidget(history_panel)
+        self._annotation_store: AnnotationStore | None = None
+        self._annotation_manifest: dict | None = None
+        self._annotation_manifest_path: Path | None = None
+
+    def _browse_annotation_manifest(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select sampling manifest", "", "Sampling manifest (sampling_manifest.json);;JSON files (*.json)"
+        )
+        if path:
+            self.annotation_manifest_input.setText(path)
+            self._load_annotation_manifest()
+
+    def _load_annotation_manifest(self) -> None:
+        raw_path = self.annotation_manifest_input.text().strip()
+        if not raw_path:
+            self.annotation_status.setText("Choose a sampling_manifest.json file first.")
+            return
+        manifest_path = Path(raw_path).expanduser().resolve()
+        try:
+            manifest = load_manifest(manifest_path)
+            frames = manifest["frames"]
+            if not frames:
+                raise ValueError("The selected manifest contains no sampled frames.")
+            dataset_path = manifest_path.parent / "annotations.json"
+            store = AnnotationStore(manifest_path, dataset_path)
+            for frame in frames:
+                filename = Path(frame["filename"])
+                if filename.name != frame["filename"] or filename.is_absolute():
+                    raise ValueError("Manifest contains a frame path outside the sampling folder.")
+            self._annotation_manifest = manifest
+            self._annotation_manifest_path = manifest_path
+            self._annotation_store = store
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+            self._annotation_manifest = None
+            self._annotation_store = None
+            self._annotation_manifest_path = None
+            self.annotation_frame_list.clear()
+            self.annotation_history_list.clear()
+            self.annotation_frame_preview.setText("Could not load this manifest.")
+            self.annotation_status.setText(f"Manifest not loaded: {error}")
+            return
+
+        self.annotation_frame_list.clear()
+        for frame in frames:
+            timestamp = frame["timestamp_ms"]
+            filename = frame["filename"]
+            item = QListWidgetItem(f"{timestamp / 1000:.2f}s  ·  {filename}")
+            item.setData(Qt.ItemDataRole.UserRole, (timestamp, filename))
+            self.annotation_frame_list.addItem(item)
+        self._refresh_annotation_history()
+        self.annotation_status.setText(
+            f"Loaded {len(frames)} frame(s). Labels are saved locally in {dataset_path.name}."
+        )
+        self.annotation_frame_list.setCurrentRow(0)
+
+    def _on_annotation_frame_selected(self, item: QListWidgetItem | None, _previous=None) -> None:
+        if item is None or self._annotation_manifest_path is None:
+            return
+        timestamp_ms, filename = item.data(Qt.ItemDataRole.UserRole)
+        frame_path = self._annotation_manifest_path.parent / filename
+        self.annotation_frame_metadata.setText(
+            f"Timestamp: {timestamp_ms} ms  ·  File: {filename}"
+        )
+        if not frame_path.is_file():
+            self.annotation_frame_preview.setPixmap(QPixmap())
+            self.annotation_frame_preview.setText(
+                "Frame image is missing. Re-run sampling or check the output folder."
+            )
+            return
+        pixmap = QPixmap(str(frame_path))
+        if pixmap.isNull():
+            self.annotation_frame_preview.setPixmap(QPixmap())
+            self.annotation_frame_preview.setText("This image could not be decoded.")
+            return
+        self.annotation_frame_preview.setText("")
+        self.annotation_frame_preview.setPixmap(
+            pixmap.scaled(
+                self.annotation_frame_preview.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
+    def resizeEvent(self, event) -> None:
+        """Keep the selected frame preview fitted when the window is resized."""
+        super().resizeEvent(event)
+        item = getattr(self, "annotation_frame_list", None)
+        if item is not None and item.currentItem() is not None:
+            self._on_annotation_frame_selected(item.currentItem())
+
+    def _save_frame_annotation(self) -> None:
+        if self._annotation_store is None:
+            self.annotation_status.setText("Load a valid sampling manifest before annotating frames.")
+            return
+        item = self.annotation_frame_list.currentItem()
+        if item is None:
+            self.annotation_status.setText("Select a sampled frame first.")
+            return
+        timestamp_ms, filename = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            annotation = self._annotation_store.add(
+                timestamp_ms,
+                filename,
+                self.annotation_label_combo.currentData(),
+                annotator=self.annotation_annotator_input.text(),
+                note=self.annotation_note_input.text(),
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            self.annotation_status.setText(f"Annotation not saved: {error}")
+            return
+        self.annotation_note_input.clear()
+        self._refresh_annotation_history()
+        self.annotation_status.setText(
+            f"Saved {annotation.label.replace('_', ' ')} at {annotation.timestamp_ms} ms."
+        )
+
+    def _refresh_annotation_history(self) -> None:
+        self.annotation_history_list.clear()
+        if self._annotation_store is None:
+            return
+        for annotation in self._annotation_store.annotations:
+            note = f" — {annotation.note}" if annotation.note else ""
+            self.annotation_history_list.addItem(
+                f"{annotation.timestamp_ms / 1000:.2f}s  ·  "
+                f"{annotation.label.replace('_', ' ')}{note}"
+            )
 
     def _build_settings_lab(self, page_layout: QVBoxLayout) -> None:
         """Build a settings snapshot and one-variable experiment workflow."""
