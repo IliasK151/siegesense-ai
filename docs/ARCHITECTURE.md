@@ -75,3 +75,30 @@ Qt UI updates must occur on the GUI thread. If global shortcuts are implemented,
 - UI smoke tests for navigation and startup.
 - Lint/type checks added as the codebase stabilises.
 - Pull requests include verification evidence and note known limitations.
+
+
+## Implemented foundation snapshot
+
+The initial domain/storage increment now provides:
+- Immutable typed records for sessions, observations, metric results, settings snapshots, and experiments.
+- SQLite schema version 1 with foreign keys and migration metadata.
+- Repository methods that exclude demo records by default.
+- Validation that observations and metrics match the parent session's demo provenance.
+- Metric provenance fields (source, method, unit, validity) and nullable values for missing measurements.
+- Local data path resolution without creating files during module import.
+
+This is the first persistence increment, not yet a migration/import of the older JSON data. Before connecting it to the UI, add explicit backup/import tooling and additional migration-failure tests.
+
+
+## Application lifecycle and local paths
+
+The feature branch now resolves a per-user data directory without filesystem side effects during module import. The SQLite constructor creates the parent directory only when the database is opened. Windows uses Local AppData (falling back to AppData or the user's Local AppData convention); macOS uses Application Support; Linux respects XDG_DATA_HOME and otherwise uses ~/.local/share.
+
+The application bootstrap opens one database, constructs the session service, injects that service into the main window, and closes the database on application shutdown. If opening the database fails, startup shows an explicit error instead of silently continuing with an unusable persistence layer.
+
+The UI has only received the dependency-injection seam so far; session review controls are not yet wired to CRUD operations. Existing MVP data migration remains blocked on obtaining the original source/schema.
+
+
+## Settings workflow service
+
+A UI-independent settings service now creates and lists settings snapshots and records experiments that reference explicit baseline/test snapshots. The service delegates validation and persistence to the repository layer. It does not apply settings to the game, collect hidden game state, or claim that a change improved performance; outcomes must be recorded by the user and supported by their own review.

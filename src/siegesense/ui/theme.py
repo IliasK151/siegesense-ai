@@ -83,6 +83,13 @@ QLabel#StatusPill {
     font-weight: 750;
 }
 QLabel#Muted { color: #7C8290; }
+QLabel#FramePreview {
+    background: #F0F1F5;
+    color: #7C8290;
+    border: 1px dashed #D5D8E2;
+    border-radius: 10px;
+    padding: 10px;
+}
 QLabel#EmptyIcon {
     background: #F1F0FF;
     color: #6D5CE8;

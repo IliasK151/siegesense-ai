@@ -17,6 +17,9 @@ dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
 ]
+vision = [
+  "opencv-python-headless>=4.9,<5",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -31,3 +34,4 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
