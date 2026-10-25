@@ -39,3 +39,6 @@ This guide defines manual labels for sampled frames from user-owned Rainbow Six 
 - Agreement statistics measure consistency, not correctness. A reviewer can be consistently wrong.
 - These labels are a foundation for later validation, not proof that automatic aim or movement detection works.
 - Evaluation reports may summarize runs of consecutive manually labelled on-target/off-target frames when the sampling interval is known. These are sampled-frame spans, not precise event durations; missing or unlabelled samples break a run, and unknown intervals must not be converted into timing claims.
+
+
+When the sampling interval is known, the sequence summary may count adjacent off-target→on-target and on-target→off-target label transitions. Counts include only consecutive annotated samples exactly one interval apart; they do not establish why the reticle changed relative to a target and are not a validated aim-correction metric.
