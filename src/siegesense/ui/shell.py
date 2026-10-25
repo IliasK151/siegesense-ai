@@ -41,6 +41,7 @@ from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
+from siegesense.vision.motion_analysis import analyze_manifest_motion, write_motion_report
 from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 
 NAV_ITEMS = [
@@ -789,6 +790,12 @@ class MainWindow(QMainWindow):
         export_report_button = QPushButton("Export local evaluation report…")
         export_report_button.clicked.connect(self._export_annotation_report)
         history_layout.addWidget(export_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        motion_report_button = QPushButton("Analyze screen-space motion…")
+        motion_report_button.setToolTip(
+            "Estimate visible feature movement between adjacent sampled frames; this is not mouse input or an aim score."
+        )
+        motion_report_button.clicked.connect(self._analyze_annotation_motion)
+        history_layout.addWidget(motion_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
         self.annotation_history_list.currentItemChanged.connect(self._on_annotation_history_selected)
@@ -811,6 +818,40 @@ class MainWindow(QMainWindow):
         self._annotation_manifest: dict | None = None
         self._annotation_manifest_path: Path | None = None
         self._refresh_annotation_sessions()
+
+    def _analyze_annotation_motion(self) -> None:
+        """Estimate visual feature motion locally and export a transparent JSON report."""
+        manifest_path = self._annotation_manifest_path
+        if manifest_path is None or not manifest_path.is_file():
+            self.annotation_status.setText("Load a valid sampling manifest before analyzing motion.")
+            return
+        target, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export screen-space motion report",
+            "screen-motion-report.json",
+            "JSON report (*.json)",
+        )
+        if not target:
+            return
+        if not Path(target).suffix:
+            target = f"{target}.json"
+        try:
+            report = analyze_manifest_motion(manifest_path)
+            output = write_motion_report(report, target)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            self.annotation_status.setText(f"Screen-space motion analysis failed: {error}")
+            return
+        if report.median_motion_px_per_sample is None:
+            motion_summary = "No usable adjacent frame pairs were available."
+        else:
+            motion_summary = (
+                f"Median visible-feature motion: {report.median_motion_px_per_sample:.2f} "
+                f"resized px/sample; 90th percentile: {report.p90_motion_px_per_sample:.2f}."
+            )
+        self.annotation_status.setText(
+            f"Motion report saved to {output}. {motion_summary} "
+            "This is screen-space visual motion, not mouse input, aim accuracy, or a skill score."
+        )
 
     def _refresh_annotation_sessions(self) -> None:
         if not hasattr(self, "annotation_session_combo"):
