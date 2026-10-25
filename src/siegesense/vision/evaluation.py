@@ -71,14 +71,20 @@ def compare_annotators(
     second = load_dataset(second_path)
     if first.source_sha256 != second.source_sha256:
         raise ValueError("Annotator datasets must reference the same source recording")
-    first_labels = {
-        (item.timestamp_ms, item.frame_filename): item.label
-        for item in first.annotations
-    }
-    second_labels = {
-        (item.timestamp_ms, item.frame_filename): item.label
-        for item in second.annotations
-    }
+    def labels_by_frame(dataset, reviewer_name: str) -> dict[tuple[int, str], str]:
+        labels: dict[tuple[int, str], str] = {}
+        for item in dataset.annotations:
+            frame_key = (item.timestamp_ms, item.frame_filename)
+            if frame_key in labels:
+                raise ValueError(
+                    f"{reviewer_name} dataset contains duplicate annotations "
+                    f"for frame {item.frame_filename} at {item.timestamp_ms} ms"
+                )
+            labels[frame_key] = item.label
+        return labels
+
+    first_labels = labels_by_frame(first, "First annotator")
+    second_labels = labels_by_frame(second, "Second annotator")
     common_frames = sorted(first_labels.keys() & second_labels.keys())
     if not common_frames:
         raise ValueError("Annotator datasets have no overlapping labelled frames")
