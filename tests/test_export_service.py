@@ -11,7 +11,7 @@ def test_summary_contains_manual_notes_in_timestamp_order() -> None:
     )
     later = Observation(
         id="note-2", session_id=session.id, timestamp_ms=83_000, text="Overshot target switch",
-        kind=ObservationKind.AIM,
+        kind=ObservationKind.AIM, tags=("overshoot", "acog"),
     )
     earlier = Observation(
         id="note-1", session_id=session.id, timestamp_ms=12_000, text="Rotated late",
@@ -23,7 +23,7 @@ def test_summary_contains_manual_notes_in_timestamp_order() -> None:
     assert "# Session review: Ranked review" in result
     assert "C:/recordings/match.mp4" in result
     assert "- **00:12 · Movement** — Rotated late" in result
-    assert "- **01:23 · Aim** — Overshot target switch" in result
+    assert "- **01:23 · Aim** — Overshot target switch · Tags: overshoot, acog" in result
     assert result.index("Rotated late") < result.index("Overshot target switch")
     assert "not an automated gameplay analysis" in result
 
