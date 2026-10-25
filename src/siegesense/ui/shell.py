@@ -44,6 +44,8 @@ from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_
 from siegesense.vision.frame_sampling import sample_video_frames
 from siegesense.vision.motion_analysis import analyze_manifest_motion, write_motion_report
 from siegesense.vision.sequence_analysis import summarize_annotated_sequences
+from siegesense.vision.spatial_analysis import summarize_spatial_error
+from siegesense.ui.point_picker import PointPickerLabel
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -731,12 +733,40 @@ class MainWindow(QMainWindow):
         detail_layout.setContentsMargins(14, 14, 14, 14)
         detail_layout.setSpacing(10)
         detail_layout.addWidget(QLabel("Frame preview"))
-        self.annotation_frame_preview = QLabel("Load a manifest to preview sampled frames.")
-        self.annotation_frame_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.annotation_frame_preview = PointPickerLabel("Load a manifest to preview sampled frames.")
         self.annotation_frame_preview.setMinimumSize(280, 180)
         self.annotation_frame_preview.setObjectName("FramePreview")
         self.annotation_frame_preview.setWordWrap(True)
+        self.annotation_frame_preview.point_marked.connect(self._on_annotation_point_marked)
         detail_layout.addWidget(self.annotation_frame_preview, 1)
+        point_tools = QHBoxLayout()
+        self.annotation_mark_reticle_button = QPushButton("Mark reticle")
+        self.annotation_mark_reticle_button.setToolTip(
+            "Then click the visible center of the reticle in the full frame."
+        )
+        self.annotation_mark_reticle_button.clicked.connect(
+            lambda: self._start_annotation_point_mark("reticle")
+        )
+        self.annotation_mark_target_button = QPushButton("Mark target")
+        self.annotation_mark_target_button.setToolTip(
+            "Then click the chosen visual reference point on the visible opponent."
+        )
+        self.annotation_mark_target_button.clicked.connect(
+            lambda: self._start_annotation_point_mark("target")
+        )
+        self.annotation_clear_points_button = QPushButton("Clear points")
+        self.annotation_clear_points_button.clicked.connect(self._clear_annotation_points)
+        point_tools.addWidget(self.annotation_mark_reticle_button)
+        point_tools.addWidget(self.annotation_mark_target_button)
+        point_tools.addWidget(self.annotation_clear_points_button)
+        point_tools.addStretch(1)
+        detail_layout.addLayout(point_tools)
+        self.annotation_point_status = QLabel(
+            "Optional spatial review: mark the reticle and a visible target on this frame."
+        )
+        self.annotation_point_status.setObjectName("Muted")
+        self.annotation_point_status.setWordWrap(True)
+        detail_layout.addWidget(self.annotation_point_status)
         frame_navigation = QHBoxLayout()
         self.annotation_frame_counter = QLabel("Frame 0 of 0")
         self.annotation_frame_counter.setObjectName("Muted")
@@ -1060,7 +1090,7 @@ class MainWindow(QMainWindow):
             self.annotation_frame_list.clear()
             self.annotation_history_list.clear()
             self._refresh_annotation_summary()
-            self.annotation_frame_preview.setText("Could not load this manifest.")
+            self.annotation_frame_preview.set_image_message("Could not load this manifest.")
             self.annotation_status.setText(f"Manifest not loaded: {error}")
             return
 
@@ -1102,24 +1132,20 @@ class MainWindow(QMainWindow):
             f"Timestamp: {timestamp_ms} ms  ·  File: {filename}"
         )
         if not frame_path.is_file():
-            self.annotation_frame_preview.setPixmap(QPixmap())
-            self.annotation_frame_preview.setText(
+            self.annotation_frame_preview.set_image_message(
                 "Frame image is missing. Re-run sampling or check the output folder."
             )
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
             return
         pixmap = QPixmap(str(frame_path))
         if pixmap.isNull():
-            self.annotation_frame_preview.setPixmap(QPixmap())
-            self.annotation_frame_preview.setText("This image could not be decoded.")
+            self.annotation_frame_preview.set_image_message("This image could not be decoded.")
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
             return
-        self.annotation_frame_preview.setText("")
-        self.annotation_frame_preview.setPixmap(
-            pixmap.scaled(
-                self.annotation_frame_preview.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        self.annotation_frame_preview.set_source_pixmap(pixmap)
+        self._restore_annotation_frame_points(timestamp_ms, filename)
 
     def resizeEvent(self, event) -> None:
         """Keep the selected frame preview fitted when the window is resized."""
@@ -1144,6 +1170,7 @@ class MainWindow(QMainWindow):
                 self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
             self.annotation_status.setText(f"Annotation not saved: {error}")
@@ -1262,10 +1289,87 @@ class MainWindow(QMainWindow):
             ):
                 self.annotation_frame_list.setCurrentRow(index)
                 break
+        self._set_annotation_spatial_points(annotation)
         self.annotation_status.setText(
             f"Editing label for {annotation.timestamp_ms / 1000:.2f}s. "
             "Change the fields above and select Update selected annotation."
         )
+
+    def _start_annotation_point_mark(self, mode: str) -> None:
+        if self._annotation_store is None or self.annotation_frame_list.currentItem() is None:
+            self.annotation_status.setText("Load a manifest and select a readable frame first.")
+            return
+        try:
+            self.annotation_frame_preview.set_marking_mode(mode)
+        except ValueError as error:
+            self.annotation_status.setText(str(error))
+            return
+        point_name = "reticle center" if mode == "reticle" else "chosen visible target reference point"
+        self.annotation_status.setText(
+            f"Click the {point_name} inside the image. Letterboxed margins are not part of the frame."
+        )
+
+    def _on_annotation_point_marked(self, mode: str, x: float, y: float) -> None:
+        point_name = "Reticle" if mode == "reticle" else "Target"
+        self._update_annotation_point_status()
+        self.annotation_status.setText(
+            f"{point_name} point marked at x={x:.1%}, y={y:.1%} of the full source frame. "
+            "Save a new annotation or update the selected one to persist the mark."
+        )
+
+    def _clear_annotation_points(self) -> None:
+        self.annotation_frame_preview.clear_points()
+        self._update_annotation_point_status()
+        self.annotation_status.setText(
+            "Point marks cleared from the current edit. Save or update the annotation to persist the change."
+        )
+
+    def _set_annotation_spatial_points(self, annotation) -> None:
+        reticle = (
+            (annotation.reticle_x, annotation.reticle_y)
+            if annotation.reticle_x is not None and annotation.reticle_y is not None
+            else None
+        )
+        target = (
+            (annotation.target_x, annotation.target_y)
+            if annotation.target_x is not None and annotation.target_y is not None
+            else None
+        )
+        self.annotation_frame_preview.set_points(reticle, target)
+        self._update_annotation_point_status()
+
+    def _restore_annotation_frame_points(self, timestamp_ms: int, filename: str) -> None:
+        store = self._annotation_store
+        if store is None:
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
+            return
+        spatial_annotations = [
+            annotation for annotation in store.annotations
+            if annotation.timestamp_ms == timestamp_ms
+            and annotation.frame_filename == filename
+            and (
+                annotation.reticle_x is not None
+                or annotation.target_x is not None
+            )
+        ]
+        if spatial_annotations:
+            self._set_annotation_spatial_points(spatial_annotations[-1])
+        else:
+            self.annotation_frame_preview.set_points(None, None)
+            self._update_annotation_point_status()
+
+    def _update_annotation_point_status(self) -> None:
+        coordinates = self.annotation_frame_preview.point_coordinates()
+        reticle = (
+            "not marked" if coordinates["reticle_x"] is None
+            else f"x={coordinates['reticle_x']:.1%}, y={coordinates['reticle_y']:.1%}"
+        )
+        target = (
+            "not marked" if coordinates["target_x"] is None
+            else f"x={coordinates['target_x']:.1%}, y={coordinates['target_y']:.1%}"
+        )
+        self.annotation_point_status.setText(f"Reticle: {reticle}  ·  Target: {target}")
 
     def _update_selected_annotation(self) -> None:
         if self._annotation_store is None:
@@ -1282,6 +1386,7 @@ class MainWindow(QMainWindow):
                 label=self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
             self.annotation_status.setText(f"Annotation not updated: {error}")
