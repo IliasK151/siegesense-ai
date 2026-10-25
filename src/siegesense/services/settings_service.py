@@ -55,7 +55,9 @@ class SettingsService:
             keys = set(baseline.values) | set(test.values)
             changed_keys = [
                 key for key in keys
-                if baseline.values.get(key) != test.values.get(key)
+                if key not in baseline.values
+                or key not in test.values
+                or baseline.values[key] != test.values[key]
             ]
             if not changed_keys:
                 raise ValueError("Baseline and test snapshots are identical; change one setting before recording the experiment")
