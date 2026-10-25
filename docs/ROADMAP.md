@@ -62,6 +62,8 @@ Current baseline: the desktop app now supports local recorded-session review, ti
 - [x] Include a descriptive summary of manually labelled aim frames, with selection-bias caveats
 - [x] Summarize consecutive human-labelled on/off-target frame runs when sampling interval is known, with tests and duration caveats
 - [x] Add an initial screen-space optical-flow report for sampled frames, with explicit limitations and tests
+- [x] Add optional human-marked reticle/target coordinate storage and descriptive spatial-offset summaries
+- [ ] Add aspect-ratio-safe click-to-mark reticle/target points in the annotation UI and test marking consistency
 - [ ] Benchmark annotation workflow, motion estimates, and sampling against real recordings
 - [ ] Display method, units, confidence, and limitations
 - [ ] Add capabilities only after validation
