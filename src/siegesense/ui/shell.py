@@ -1569,6 +1569,8 @@ class MainWindow(QMainWindow):
 
     def show_page(self, name: str) -> None:
         """Select a page and keep the active navigation state in sync."""
+        if name == "Clip Annotation":
+            self._refresh_annotation_sessions()
         index = [item[0] for item in NAV_ITEMS].index(name)
         self.page_stack.setCurrentIndex(index)
         self.breadcrumb.setText(f"Workspace  /  {name}")
