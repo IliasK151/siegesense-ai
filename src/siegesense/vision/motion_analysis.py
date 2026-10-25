@@ -109,7 +109,7 @@ def analyze_manifest_motion(
     for _index, (start_ms, first_path), (end_ms, second_path) in selected:
         first = cv2_module.imread(str(first_path), cv2_module.IMREAD_GRAYSCALE)
         second = cv2_module.imread(str(second_path), cv2_module.IMREAD_GRAYSCALE)
-        if first is None or second is None:
+        if first is None or second is None or first.shape[:2] != second.shape[:2]:
             unusable += 1
             continue
         first = _resize_frame(cv2_module, first, max_dimension=640)
