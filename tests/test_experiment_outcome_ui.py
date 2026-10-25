@@ -42,7 +42,7 @@ def test_settings_lab_records_completed_experiment_outcome(app: QApplication) ->
         database.close()
 
 
-def test_settings_lab_requires_outcome_for_completed_experiment(app: QApplication) -> None:
+def test_settings_lab_requires_outcome_for_completed_experiment(app: QApplication, monkeypatch) -> None:
     database = Database(":memory:")
     service = SettingsService(database)
     baseline = service.save_snapshot("Baseline", {"horizontal": 6})
@@ -53,10 +53,14 @@ def test_settings_lab_requires_outcome_for_completed_experiment(app: QApplicatio
             window.experiment_status_combo.findData("completed")
         )
         window.experiment_outcome_input.clear()
-        # Validation is intentionally checked without opening a modal dialog.
-        assert experiment.status == "planned"
-        assert window.experiment_status_combo.currentData() == "completed"
-        assert window.experiment_outcome_input.text() == ""
+        messages: list[str] = []
+        monkeypatch.setattr(
+            "siegesense.ui.shell.QMessageBox.information",
+            lambda *args: messages.append(str(args[2])),
+        )
+        window._update_selected_experiment()
+        assert messages and "outcome" in messages[0].lower()
+        assert service.list_experiments()[0].status == "planned"
     finally:
         window.close()
         database.close()
