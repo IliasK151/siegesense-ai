@@ -50,10 +50,11 @@ class Database:
     """Manage a local SQLite file and provide narrow repository methods."""
 
     def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
-        if str(self.path) != ":memory:":
+        raw_path = str(path)
+        self.path = Path(raw_path)
+        if raw_path != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(str(self.path))
+        self._connection = sqlite3.connect(raw_path)
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
         self._migrate()
