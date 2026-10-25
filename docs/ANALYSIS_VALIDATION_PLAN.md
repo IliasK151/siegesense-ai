@@ -46,7 +46,7 @@ The optional utility at src/siegesense/vision/frame_sampling.py samples a user-s
 
 ## Implemented annotation data layer
 
-`src/siegesense/vision/annotations.py` now provides a local annotation store keyed to a sampling manifest's source SHA-256. Supported human labels are target transition, crosshair on/off target, movement start/stop, ambiguous, and unusable frame. An annotation must reference an exact sampled frame from the manifest. JSON datasets are schema-versioned and saved via a temporary file followed by replacement. Loading against a different source fingerprint is rejected. This is a data layer only; a graphical annotation UI is still pending.
+`src/siegesense/vision/annotations.py` now provides a local annotation store keyed to a sampling manifest's source SHA-256. Supported human labels are target transition, crosshair on/off target, movement start/stop, ambiguous, and unusable frame. An annotation must reference an exact sampled frame from the manifest. JSON datasets are schema-versioned and saved via a temporary file followed by replacement. Loading against a different source fingerprint is rejected. Dataset loading also rejects duplicate annotation IDs and frame filenames that are not local basenames, preventing malformed records and path traversal. This is a data layer only; a graphical annotation UI is still pending.
 
 
 ## Annotation workspace
