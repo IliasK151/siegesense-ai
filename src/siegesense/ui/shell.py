@@ -805,6 +805,28 @@ class MainWindow(QMainWindow):
             self.annotation_status.setText("Selected annotation no longer exists.")
             self._refresh_annotation_history()
             return
+        selected_session = next(
+            (session for session in self.session_service.list_sessions() if session.id == session_id),
+            None,
+        )
+        if selected_session is None:
+            self.annotation_status.setText("Selected session is no longer available. Refresh the session list.")
+            self._refresh_annotation_sessions()
+            return
+        source_path = (
+            self._annotation_manifest.get("source_path")
+            if self._annotation_manifest is not None
+            else None
+        )
+        if selected_session.media_path and source_path:
+            selected_media = Path(selected_session.media_path).expanduser().resolve()
+            annotation_media = Path(source_path).expanduser().resolve()
+            if selected_media != annotation_media:
+                self.annotation_status.setText(
+                    "The sampled clip does not match this session's recording. "
+                    "Choose a session created from the same source video."
+                )
+                return
         annotation_tag = f"annotation-id:{annotation.annotation_id}"
         try:
             existing_observations = self.session_service.list_observations(session_id)
