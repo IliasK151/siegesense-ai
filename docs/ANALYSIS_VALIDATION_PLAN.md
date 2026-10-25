@@ -72,3 +72,8 @@ Session Review includes an explicit action for the selected observation. For obs
 ## Session recording provenance
 
 Session records support an optional SHA-256 fingerprint for their linked media. Fingerprinting is explicit and chunked through `SessionService.fingerprint_session_media`, so importing or creating a session does not unexpectedly hash a large video on the UI thread. The database migrates older local stores to schema version 2 without discarding session data. When both a session and annotation manifest have fingerprints, linking requires an exact match; when either fingerprint is unavailable, the UI falls back to the existing conservative resolved-path check. A matching hash is stronger evidence of file identity than a path, while path-only matching is not proof that file contents are unchanged.
+
+
+## Evaluation dataset hygiene prototype
+
+`src/siegesense/vision/evaluation.py` provides a first reporting/validation utility for named annotation JSON datasets. It summarizes annotation counts by human label and rejects reuse of the same source SHA-256 across separate dataset entries, guarding against recording-level leakage between training and evaluation. It does not train a model or claim detection accuracy. Before any model evaluation, curate multiple distinct recordings, agree on annotation definitions, and record annotator agreement and exclusions.
