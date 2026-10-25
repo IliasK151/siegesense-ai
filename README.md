@@ -4,18 +4,18 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early MVP / architecture and product foundations. This repository is the source of truth for requirements, implementation, issues, and decisions. Features are not considered implemented until code and verification support that claim.
+> **Current status:** Early development. The repository is the source of truth for requirements, implementation, issues, and decisions. The current app is an initial desktop shell; automatic vision analysis is not implemented.
 
 ## Product principles
 
 - **Evidence before advice.** Every measured metric should identify its source, units, and calculation method.
 - **Local-first by default.** Gameplay recordings and personal session notes stay on the user's machine unless the user explicitly chooses otherwise.
-- **Clear provenance.** Demo data is visibly labelled and never mixed with real session records.
+- **Clear provenance.** Demo mode is visibly labelled and must never be mixed with real progress.
 - **Human-controlled settings.** The app may propose experiments; users review and apply game settings themselves.
-- **Fair play.** No game-memory reading, process injection, automated gameplay inputs, recoil control, or hidden competitive advantage. Any live-screen integration must be reviewed separately for game rules and privacy.
+- **Fair play.** No game-memory reading, process injection, automated gameplay inputs, recoil control, or hidden competitive advantage.
 - **Incremental engineering.** Small changes, tests, documented decisions, and reviewable pull requests.
 
-## Planned workspace
+## Workspace
 
 1. Overview
 2. Aim Lab
@@ -25,45 +25,49 @@ SiegeSense AI is intended to help players understand their aim, movement, settin
 6. AI Coach
 7. Preferences & Privacy
 
-The initial milestone is a maintainable desktop shell and design system with honest demo data. Recorded-footage analysis and measurable coaching capabilities follow as separate, testable increments.
+The current shell includes navigation and placeholder states for all destinations. A placeholder is not a completed feature. Recorded-footage analysis and measurable coaching capabilities will be delivered as separate, testable increments.
 
-## Technology direction
+## Technology
 
 - Windows-first desktop application
-- Python and PySide6
-- Local persistence, with a versioned database schema planned
+- Python 3.10–3.12
+- PySide6
+- Local persistence planned; schema and migration work tracked in GitHub Issues
 - Automated tests and CI checks
 
-The exact architecture is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), and [decisions](docs/DECISIONS.md).
 
 ## Development setup
 
-Python 3.10–3.12 is the initial target until CI validates a broader range.
+From PowerShell on Windows:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -e ".[dev]"
 python main.py
 ```
 
-These commands assume the MVP entry point and requirements file have been added to the checkout. See the issues and roadmap for the current implementation state.
+If you prefer not to install the package in editable mode, set `PYTHONPATH=src` before launching. Editable install is the recommended path.
+
+Run checks:
+
+```powershell
+pytest
+ruff check .
+```
 
 ## Project workflow
 
-- [Roadmap](docs/ROADMAP.md)
-- [Product scope](docs/PRODUCT_SPEC.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Decision log](docs/DECISIONS.md)
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-
-Use GitHub Issues for tasks and defects. Implement substantial work on a branch and open a pull request with tests, screenshots for UI changes, and clear verification notes.
+- Use [GitHub Issues](https://github.com/IliasK151/siegesense-ai/issues) for tasks and defects.
+- Implement substantial changes on a focused branch.
+- Open a pull request with tests, screenshots for UI changes, and honest verification notes.
+- Keep session data and recordings out of Git.
 
 ## Fair-play and privacy boundary
 
-SiegeSense AI is a coaching and review tool, not a gameplay automation tool. It must not read protected game memory, modify the game, inject into the game process, or automate aiming or movement. Screen capture and any future live mode must be opt-in, visible, locally controlled, and checked against current game rules before release.
+SiegeSense AI is a coaching and review tool, not a gameplay automation tool. It must not read protected game memory, modify the game, inject into the game process, or automate aiming or movement. Screen capture and any future live mode must be opt-in, visible, locally controlled, and reviewed against current game rules before release.
 
 ## License
 
