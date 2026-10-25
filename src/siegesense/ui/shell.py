@@ -700,6 +700,12 @@ class MainWindow(QMainWindow):
         self.settings_experiment_list.setMinimumHeight(100)
         self.settings_experiment_list.currentItemChanged.connect(self._load_selected_experiment)
         experiment_layout.addWidget(self.settings_experiment_list)
+        self.experiment_history_summary = QLabel(
+            "Experiment history will summarise completed and inconclusive results here."
+        )
+        self.experiment_history_summary.setWordWrap(True)
+        self.experiment_history_summary.setObjectName("Muted")
+        experiment_layout.addWidget(self.experiment_history_summary)
         result_form = QFormLayout()
         self.experiment_status_combo = QComboBox()
         for status in ("planned", "running", "completed", "inconclusive", "cancelled"):
@@ -791,6 +797,19 @@ class MainWindow(QMainWindow):
             self.experiment_outcome_input.setEnabled(True)
             if self.settings_experiment_list.currentItem() is None:
                 self.settings_experiment_list.setCurrentRow(0)
+        if hasattr(self, "experiment_history_summary"):
+            completed = [item for item in experiments if item.status == "completed"]
+            inconclusive = [item for item in experiments if item.status == "inconclusive"]
+            lines = [
+                f"Experiment history: {len(completed)} completed · {len(inconclusive)} inconclusive",
+                "Recorded outcomes are observations, not proof that a setting caused a performance change.",
+            ]
+            for item in sorted(completed + inconclusive, key=lambda entry: entry.created_at, reverse=True):
+                outcome = (item.outcome or "No outcome recorded").strip()
+                lines.append(f"• {item.title} ({item.status}): {outcome}")
+            if not completed and not inconclusive:
+                lines.append("Complete an experiment or mark it inconclusive to build a comparison history.")
+            self.experiment_history_summary.setText("\\n".join(lines))
 
     def _refresh_snapshot_comparison(self, *_args: object) -> None:
         """Show exact differences between the selected local settings snapshots."""
