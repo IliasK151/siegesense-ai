@@ -119,7 +119,7 @@ Evaluation reports and the Clip Annotation workspace now include counts of manua
 This is a descriptive visual-motion prototype, not a validated aim or movement metric. Camera motion, recoil animation, moving objects, effects, scene changes, and compression can affect estimates. The values are in resized-image pixels per sampled interval; they are not mouse-input measurements, world-space aim, reticle-to-target distance, hit probability, or player skill. Before using the output for coaching, benchmark it against manually reviewed footage across resolutions, frame rates, scopes, and recording conditions. Do not infer that a larger or smaller value is inherently better.
 
 
-The coherent-feature ratio is the fraction of tracked features whose displacement lies within 3 resized-image pixels of the median displacement vector. It may describe whether visible features moved in a similar direction, but is not a validated camera-motion classifier and must not be interpreted as aim quality.
+The coherent-feature ratio is the fraction of tracked features whose displacement lies within 3 resized-image pixels of the median displacement vector. It may describe whether visible features moved in a similar direction, but is not a validated camera-motion classifier and must not be interpreted as aim quality. When eligible pairs exceed the configured processing cap, the analyzer selects a deterministic evenly spaced subset and reports the number subsampled separately from pairs skipped due to timestamp gaps and pairs that could not be analyzed.
 
 
 ### Manual label-transition counts
