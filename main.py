@@ -1,6 +1,6 @@
 """Launch SiegeSense AI."""
 
-from siegesense import app
+import siegesense.app as app
 
 
 if __name__ == "__main__":
