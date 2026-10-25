@@ -40,6 +40,7 @@ from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
+from siegesense.vision.sequence_analysis import summarize_annotated_sequences
 from siegesense.vision.frame_sampling import sample_video_frames
 
 NAV_ITEMS = [
@@ -1143,13 +1144,28 @@ class MainWindow(QMainWindow):
             return
         share = summary.on_target_share_of_labelled_frames
         share_text = "n/a" if share is None else f"{share:.0%}"
+        try:
+            sequence = summarize_annotated_sequences(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            sequence = None
+        if sequence is None or sequence.sampling_interval_ms is None:
+            sequence_text = "sampled run timing unavailable"
+        else:
+            longest = sequence.off_target_runs.longest_observed_span_ms
+            longest_text = "n/a" if longest is None else f"{longest} ms"
+            sequence_text = (
+                f"consecutive off-target runs: {sequence.off_target_runs.run_count}, "
+                f"longest observed sampled span: {longest_text}"
+            )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
             f"off target: {summary.crosshair_off_target_frames} · "
             f"selected-frame on-target share: {share_text} · "
             f"transitions: {summary.target_transition_frames} · "
             f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
-            "Descriptive only; not aim accuracy or representative gameplay performance."
+            f"{sequence_text}. "
+            "Observed sampled spans are not precise event durations. Descriptive only; "
+            "not aim accuracy or representative gameplay performance."
         )
 
     def _refresh_annotation_history(self) -> None:
