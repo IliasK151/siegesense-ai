@@ -34,7 +34,7 @@ The GitHub issue tracker is the execution queue. This page records phase order a
 - [x] Optional observation tags with normalisation and local persistence
 - [x] Search/filter session notes and Aim Lab/Movement review by text or tag
 - [x] Include tags in Markdown exports
-- [ ] Exportable structured data (JSON/CSV)
+- [x] Exportable structured data (JSON/CSV)
 
 ## Phase 4 — Settings Lab and coaching
 - [x] Baseline settings snapshots
