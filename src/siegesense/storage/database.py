@@ -17,7 +17,7 @@ from siegesense.domain.models import (
 )
 from siegesense.storage.paths import default_database_path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -75,7 +75,15 @@ class Database:
             with self._connection:
                 self._connection.executescript(_SCHEMA)
                 self._connection.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES (1)")
-                self._connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                self._connection.execute("PRAGMA user_version = 1")
+        current = self._connection.execute("PRAGMA user_version").fetchone()[0]
+        if current < 2:
+            with self._connection:
+                columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(sessions)").fetchall()}
+                if "media_sha256" not in columns:
+                    self._connection.execute("ALTER TABLE sessions ADD COLUMN media_sha256 TEXT")
+                self._connection.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)")
+                self._connection.execute("PRAGMA user_version = 2")
 
     def close(self) -> None:
         self._connection.close()
@@ -88,9 +96,12 @@ class Database:
 
     def add_session(self, session: Session) -> None:
         with self._connection:
-            self._connection.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            self._connection.execute(
+                "INSERT INTO sessions (id, title, started_at, duration_ms, media_path, notes, is_demo, created_at, media_sha256) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (session.id, session.title, session.started_at, session.duration_ms, session.media_path,
-                 session.notes, int(session.is_demo), session.created_at))
+                 session.notes, int(session.is_demo), session.created_at, session.media_sha256),
+            )
 
     def get_session(self, session_id: str) -> Session | None:
         row = self._connection.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
@@ -98,14 +109,27 @@ class Database:
             return None
         return Session(id=row["id"], title=row["title"], started_at=row["started_at"],
             duration_ms=row["duration_ms"], media_path=row["media_path"], notes=row["notes"],
-            is_demo=bool(row["is_demo"]), created_at=row["created_at"])
+            is_demo=bool(row["is_demo"]), created_at=row["created_at"],
+            media_sha256=row["media_sha256"])
+
+    def set_session_media_sha256(self, session_id: str, media_sha256: str) -> None:
+        """Store a validated SHA-256 fingerprint for an existing session recording."""
+        if len(media_sha256) != 64 or any(char not in "0123456789abcdef" for char in media_sha256):
+            raise ValueError("Session media SHA-256 must be 64 lowercase hexadecimal characters")
+        with self._connection:
+            cursor = self._connection.execute(
+                "UPDATE sessions SET media_sha256 = ? WHERE id = ?", (media_sha256, session_id)
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("Session does not exist")
 
     def list_sessions(self, *, include_demo: bool = False) -> list[Session]:
         sql = "SELECT * FROM sessions" if include_demo else "SELECT * FROM sessions WHERE is_demo = 0"
         rows = self._connection.execute(sql + " ORDER BY started_at DESC").fetchall()
         return [Session(id=r["id"], title=r["title"], started_at=r["started_at"],
             duration_ms=r["duration_ms"], media_path=r["media_path"], notes=r["notes"],
-            is_demo=bool(r["is_demo"]), created_at=r["created_at"]) for r in rows]
+            is_demo=bool(r["is_demo"]), created_at=r["created_at"],
+            media_sha256=r["media_sha256"]) for r in rows]
 
     def add_observation(self, observation: Observation) -> None:
         parent = self.get_session(observation.session_id)
