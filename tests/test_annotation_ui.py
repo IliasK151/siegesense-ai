@@ -165,6 +165,28 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
         window._link_annotation_to_session()
         assert service.list_observations(mismatched_session.id) == []
         assert "does not match" in window.annotation_status.text().lower()
+
+        window.annotation_session_combo.setCurrentIndex(
+            window.annotation_session_combo.findData(session.id)
+        )
+        window._link_annotation_to_session()
+        window.show_page("Session Review")
+        window.review_session_combo.setCurrentIndex(
+            window.review_session_combo.findData(session.id)
+        )
+        window.observation_list.setCurrentRow(0)
+        window._open_linked_annotation_frame()
+        assert "Clip Annotation" in window.breadcrumb.text()
+        assert window.annotation_frame_list.currentItem() is not None
+        assert window.annotation_frame_list.currentItem().data(Qt.ItemDataRole.UserRole) == (0, frame_name)
+
+        window.show_page("Session Review")
+        window.review_session_combo.setCurrentIndex(
+            window.review_session_combo.findData(session.id)
+        )
+        window.observation_list.setCurrentRow(0)
+        window._open_linked_annotation_frame()
+        assert "matching sampling manifest" in window.review_status.text().lower()
     finally:
         window.close()
         database.close()
