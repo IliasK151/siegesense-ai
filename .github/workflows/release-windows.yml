@@ -41,6 +41,15 @@ jobs:
           --collect-all PySide6.QtMultimedia
           --collect-all PySide6.QtMultimediaWidgets
           main.py
+      - name: Smoke-test packaged desktop app
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "SiegeSenseSmokeData"
+          & "dist/SiegeSenseAI/SiegeSenseAI.exe" --smoke-test
+          if ($LASTEXITCODE -ne 0) {
+            throw "Packaged desktop smoke test failed with exit code $LASTEXITCODE"
+          }
       - name: Include user-facing documentation
         shell: pwsh
         run: |
