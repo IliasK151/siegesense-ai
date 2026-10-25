@@ -41,7 +41,7 @@ def test_coordinate_points_round_trip_and_spatial_offsets(tmp_path: Path) -> Non
     assert summary.excluded_without_both_points == 1
     assert summary.median_horizontal_offset_pct == 10.0
     assert summary.median_vertical_offset_pct == -10.0
-    assert summary.median_distance_pct_frame_diagonal == pytest.approx(10 / 2**0.5)
+    assert summary.median_distance_pct_frame_diagonal == pytest.approx(10.0)
     assert "not mouse input" in " ".join(summary.limitations)
     assert len(reopened.annotations) == 2
 
