@@ -838,7 +838,8 @@ class MainWindow(QMainWindow):
         try:
             report = analyze_manifest_motion(manifest_path)
             output = write_motion_report(report, target)
-        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        except Exception as error:
+            # OpenCV can raise its own exception type for damaged or unsupported images.
             self.annotation_status.setText(f"Screen-space motion analysis failed: {error}")
             return
         if report.median_motion_px_per_sample is None:
