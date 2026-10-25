@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from siegesense.vision.report import main as report_main
 from siegesense.vision.evaluation import (
     compare_annotators,
     summarize_datasets,
     write_evaluation_report,
 )
+from siegesense.vision.report import main as report_main
 
 
 def make_dataset(path: Path, source_hash: str, labels: list[str]) -> Path:
