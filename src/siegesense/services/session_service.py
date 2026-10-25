@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 from siegesense.domain.models import Observation, ObservationKind, Session, utc_now_iso
 from siegesense.storage.database import Database
 
@@ -33,6 +36,26 @@ class SessionService:
         )
         self._database.add_session(session)
         return session
+
+    def fingerprint_session_media(self, session_id: str, *, chunk_size: int = 1024 * 1024) -> str:
+        """Hash a session recording on demand and persist its SHA-256 fingerprint."""
+        if chunk_size < 1:
+            raise ValueError("Chunk size must be greater than zero")
+        session = self._database.get_session(session_id)
+        if session is None:
+            raise ValueError("Session does not exist")
+        if not session.media_path:
+            raise ValueError("Session has no recording path")
+        path = Path(session.media_path).expanduser()
+        if not path.is_file():
+            raise ValueError("Session recording file does not exist")
+        digest = hashlib.sha256()
+        with path.open("rb") as media_file:
+            for chunk in iter(lambda: media_file.read(chunk_size), b""):
+                digest.update(chunk)
+        fingerprint = digest.hexdigest()
+        self._database.set_session_media_sha256(session_id, fingerprint)
+        return fingerprint
 
     def list_sessions(self, *, include_demo: bool = False) -> list[Session]:
         """List recent sessions; demo records are excluded by default."""
