@@ -1,8 +1,6 @@
 """Tests for full-frame normalized coordinates in the manual point picker."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPixmap
