@@ -440,7 +440,14 @@ class MainWindow(QMainWindow):
         self.observation_kind.addItem("Other", "other")
         self.observation_text = QLineEdit()
         self.observation_text.setPlaceholderText("What happened, and what should be reviewed?")
-        observation_form.addRow("Timestamp", self.observation_timestamp)
+        timestamp_row = QHBoxLayout()
+        timestamp_row.addWidget(self.observation_timestamp, 1)
+        use_playback_time = QPushButton("Use playback time")
+        use_playback_time.clicked.connect(self._set_observation_timestamp_from_video)
+        timestamp_row.addWidget(use_playback_time)
+        timestamp_host = QWidget()
+        timestamp_host.setLayout(timestamp_row)
+        observation_form.addRow("Timestamp", timestamp_host)
         observation_form.addRow("Category", self.observation_kind)
         observation_form.addRow("Observation", self.observation_text)
         review_layout.addLayout(observation_form)
@@ -449,6 +456,7 @@ class MainWindow(QMainWindow):
         review_layout.addWidget(add_note, 0, Qt.AlignmentFlag.AlignLeft)
         self.observation_list = QListWidget()
         self.observation_list.setMinimumHeight(150)
+        self.observation_list.itemDoubleClicked.connect(self._seek_to_selected_observation)
         review_layout.addWidget(self.observation_list)
         self.review_status = QLabel("Observations are saved locally. Demo records are excluded.")
         self.review_status.setObjectName("Muted")
@@ -722,6 +730,31 @@ class MainWindow(QMainWindow):
             entry = QListWidgetItem(f"{timestamp}  ·  {item.kind.value.title()}  ·  {item.text}")
             entry.setData(Qt.ItemDataRole.UserRole, item.id)
             self.observation_list.addItem(entry)
+
+    def _set_observation_timestamp_from_video(self) -> None:
+        """Copy the current playback position into the timestamp editor."""
+        if not hasattr(self, "review_media_player"):
+            return
+        self.observation_timestamp.setValue(self.review_media_player.position() // 1000)
+
+    def _seek_to_selected_observation(self, item: QListWidgetItem) -> None:
+        """Seek to the timestamp represented by a selected observation."""
+        if not hasattr(self, "review_media_player"):
+            return
+        text = item.text()
+        timestamp = text.split("  ·  ", maxsplit=1)[0]
+        try:
+            minutes, seconds = timestamp.split(":", maxsplit=1)
+            milliseconds = (int(minutes) * 60 + int(seconds)) * 1000
+        except (ValueError, TypeError):
+            return
+        if self.review_media_player.source().isEmpty():
+            self.review_status.setText("This observation has a timestamp, but no local video is loaded.")
+            return
+        self.review_media_player.setPosition(milliseconds)
+        self.review_media_player.pause()
+        self.observation_timestamp.setValue(milliseconds // 1000)
+        self.review_status.setText(f"Jumped to observation at {timestamp}.")
 
     def _add_review_observation(self) -> None:
         if self.session_service is None:
