@@ -5,11 +5,11 @@ train/evaluation leakage. It does not train or score a vision model.
 """
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 
 from siegesense.vision.annotations import ALLOWED_LABELS, load_dataset
