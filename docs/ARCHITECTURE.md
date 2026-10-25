@@ -97,3 +97,8 @@ The feature branch now resolves a per-user data directory without filesystem sid
 The application bootstrap opens one database, constructs the session service, injects that service into the main window, and closes the database on application shutdown. If opening the database fails, startup shows an explicit error instead of silently continuing with an unusable persistence layer.
 
 The UI has only received the dependency-injection seam so far; session review controls are not yet wired to CRUD operations. Existing MVP data migration remains blocked on obtaining the original source/schema.
+
+
+## Settings workflow service
+
+A UI-independent settings service now creates and lists settings snapshots and records experiments that reference explicit baseline/test snapshots. The service delegates validation and persistence to the repository layer. It does not apply settings to the game, collect hidden game state, or claim that a change improved performance; outcomes must be recorded by the user and supported by their own review.
