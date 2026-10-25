@@ -7,6 +7,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from siegesense.storage.paths import default_database_path
+
 from siegesense.domain.models import (
     MetricResult,
     Observation,
@@ -56,8 +58,8 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, appli
 class Database:
     """Manage a local SQLite file and provide narrow repository methods."""
 
-    def __init__(self, path: str | Path) -> None:
-        raw_path = str(path)
+    def __init__(self, path: str | Path | None = None) -> None:
+        raw_path = str(default_database_path() if path is None else path)
         self.path = Path(raw_path)
         if raw_path != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)
