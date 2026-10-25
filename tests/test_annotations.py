@@ -64,6 +64,40 @@ def test_annotations_cannot_be_loaded_for_a_different_recording(tmp_path: Path) 
         AnnotationStore(second_manifest, tmp_path / "annotations.json")
 
 
+def test_update_changes_label_and_note_without_changing_frame(tmp_path: Path) -> None:
+    manifest = make_manifest(tmp_path)
+    dataset_path = tmp_path / "annotations.json"
+    store = AnnotationStore(manifest, dataset_path)
+    original = store.add(
+        0, "frame_000000000ms.png", "ambiguous",
+        annotator="reviewer", note="initial note",
+    )
+    updated = store.update(
+        original.annotation_id,
+        label="crosshair_on_target",
+        annotator="reviewer 2",
+        note="corrected after replay",
+    )
+    reopened = AnnotationStore(manifest, dataset_path)
+    assert updated.annotation_id == original.annotation_id
+    assert updated.timestamp_ms == original.timestamp_ms
+    assert updated.frame_filename == original.frame_filename
+    assert updated.label == "crosshair_on_target"
+    assert updated.annotator == "reviewer 2"
+    assert updated.note == "corrected after replay"
+    assert reopened.annotations == (updated,)
+
+
+def test_update_rejects_unknown_id_and_invalid_label(tmp_path: Path) -> None:
+    manifest = make_manifest(tmp_path)
+    store = AnnotationStore(manifest, tmp_path / "annotations.json")
+    with pytest.raises(ValueError, match="does not exist"):
+        store.update("unknown", label="ambiguous", annotator="reviewer")
+    item = store.add(0, "frame_000000000ms.png", "ambiguous", annotator="reviewer")
+    with pytest.raises(ValueError, match="Unsupported annotation label"):
+        store.update(item.annotation_id, label="not-a-label", annotator="reviewer")
+
+
 def test_remove_persists_and_unknown_id_is_safe(tmp_path: Path) -> None:
     manifest = make_manifest(tmp_path)
     dataset_path = tmp_path / "annotations.json"
