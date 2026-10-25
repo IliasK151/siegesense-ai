@@ -45,6 +45,16 @@ def test_motion_analysis_rejects_manifest_path_traversal(tmp_path: Path) -> None
     with pytest.raises(ValueError, match="invalid frame entry"):
         analyze_manifest_motion(manifest)
 
+    windows_manifest = _write_manifest(
+        tmp_path,
+        frames=[
+            {"timestamp_ms": 0, "filename": "frame_000.png"},
+            {"timestamp_ms": 100, "filename": r"..\\outside.png"},
+        ],
+    )
+    with pytest.raises(ValueError, match="invalid frame entry"):
+        analyze_manifest_motion(windows_manifest)
+
 
 def test_motion_analysis_requires_known_sampling_interval(tmp_path: Path) -> None:
     manifest = tmp_path / "sampling_manifest.json"
