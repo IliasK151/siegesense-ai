@@ -66,3 +66,17 @@ def test_point_coordinates_validate_normalized_range(app: QApplication) -> None:
     picker = PointPickerLabel()
     with pytest.raises(ValueError, match="between 0 and 1"):
         picker.set_points((1.1, 0.5), None)
+
+
+
+def test_unavailable_image_clears_stale_points(app: QApplication) -> None:
+    image = QPixmap(100, 100)
+    picker = PointPickerLabel()
+    picker.set_source_pixmap(image)
+    picker.set_points((0.2, 0.3), (0.7, 0.8))
+    picker.set_image_message("Image unavailable")
+    assert picker.point_coordinates() == {
+        "reticle_x": None, "reticle_y": None, "target_x": None, "target_y": None,
+    }
+    assert picker.pixmap().isNull()
+    assert picker.text() == "Image unavailable"
