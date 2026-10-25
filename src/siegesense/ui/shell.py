@@ -30,8 +30,8 @@ from PySide6.QtWidgets import (
 )
 
 from siegesense.domain.models import ObservationKind
-from siegesense.services.session_service import SessionService
 from siegesense.services.export_service import render_session_summary
+from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 
 NAV_ITEMS = [
