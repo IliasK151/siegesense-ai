@@ -10,7 +10,7 @@ The desktop app has usable local workflows for session notes, settings snapshots
 
 - [ ] CI tests and lint pass on Python 3.10, 3.11, and 3.12 on Windows.
 - [x] The Windows packaging workflow builds on a clean GitHub Actions runner.
-- [ ] The packaged-app offscreen smoke test passes reliably; recent runs exposed a failure and diagnostic logging is being improved.
+- [x] The packaged-app offscreen smoke test passes on the latest recorded CI package run (`40208859939`, commit `58b96ee`). This confirms startup/navigation/database initialization in the CI environment only; clean-machine installation and real-media playback remain unverified.
 - [ ] Install and launch the packaged app on a separate clean Windows machine with no Python environment installed.
 - [ ] Verify supported video playback with representative recordings and codecs.
 - [ ] Verify database creation, restart persistence, and error messaging when the local data directory is unavailable.
