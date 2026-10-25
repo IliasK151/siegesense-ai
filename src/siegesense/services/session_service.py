@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from siegesense.domain.models import Observation, ObservationKind, Session
+from siegesense.domain.models import Observation, ObservationKind, Session, utc_now_iso
 from siegesense.storage.database import Database
 
 
@@ -25,7 +25,7 @@ class SessionService:
         """Validate and persist a new session, returning the stored record."""
         session = Session(
             title=title,
-            started_at=started_at or Session().started_at,
+            started_at=started_at if started_at is not None else utc_now_iso(),
             duration_ms=duration_ms,
             media_path=media_path,
             notes=notes,
