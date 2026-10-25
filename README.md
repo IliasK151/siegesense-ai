@@ -4,7 +4,7 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. Automatic vision analysis is not implemented. The Clip Annotation workspace can sample local recordings, label frames, display descriptive summaries, and export a local evaluation report, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and cautious consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
+> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. Automatic vision analysis is not implemented. The Clip Annotation workspace can sample local recordings, label frames, display descriptive summaries, and export a local evaluation report, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and cautious consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
 
 ## Product principles
 
