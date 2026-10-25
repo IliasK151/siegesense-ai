@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build outputs
+build/
+dist/
+*.spec
+
+# Local application data and recordings
+.siegesense_ai/
+data/local/
+recordings/
+*.mp4
+*.mkv
+*.mov
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
