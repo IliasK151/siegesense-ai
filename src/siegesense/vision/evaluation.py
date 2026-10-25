@@ -25,11 +25,49 @@ class AgreementSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class AimFrameSummary:
+    """Descriptive counts from manually selected frames, not an accuracy score."""
+
+    crosshair_on_target_frames: int
+    crosshair_off_target_frames: int
+    determinate_crosshair_frames: int
+    on_target_share_of_labelled_frames: float | None
+    target_transition_frames: int
+    ambiguous_frames: int
+    unusable_frames: int
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetSummary:
     dataset_name: str
     recording_count: int
     annotation_count: int
     label_counts: dict[str, int]
+
+
+def summarize_aim_frames(dataset_path: str | Path) -> AimFrameSummary:
+    """Summarize manual aim-related labels without claiming automatic detection.
+
+    The on-target share describes only frames the annotator chose to label as
+    crosshair-on/off-target. It is not aim accuracy, hit probability, or a
+    representative estimate of all gameplay.
+    """
+    dataset = load_dataset(dataset_path)
+    counts = Counter(annotation.label for annotation in dataset.annotations)
+    on_target = counts["crosshair_on_target"]
+    off_target = counts["crosshair_off_target"]
+    determinate = on_target + off_target
+    return AimFrameSummary(
+        crosshair_on_target_frames=on_target,
+        crosshair_off_target_frames=off_target,
+        determinate_crosshair_frames=determinate,
+        on_target_share_of_labelled_frames=(
+            on_target / determinate if determinate else None
+        ),
+        target_transition_frames=counts["target_transition"],
+        ambiguous_frames=counts["ambiguous"],
+        unusable_frames=counts["unusable_frame"],
+    )
 
 
 def summarize_datasets(
@@ -141,7 +179,13 @@ def write_evaluation_report(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "report_type": "annotation_coverage_and_agreement",
         "model_performance_evaluated": False,
-        "datasets": [asdict(summary) for summary in summaries],
+        "datasets": [
+            {
+                **asdict(summary),
+                "aim_frame_summary": asdict(summarize_aim_frames(path)),
+            }
+            for summary, (_, path) in zip(summaries, dataset_entries, strict=True)
+        ],
         "annotator_agreement": agreements,
         "limitations": [
             "Agreement measures consistency, not correctness.",
