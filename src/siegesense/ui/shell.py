@@ -689,6 +689,21 @@ class MainWindow(QMainWindow):
         self.annotation_frame_preview.setObjectName("FramePreview")
         self.annotation_frame_preview.setWordWrap(True)
         detail_layout.addWidget(self.annotation_frame_preview, 1)
+        frame_navigation = QHBoxLayout()
+        self.annotation_frame_counter = QLabel("Frame 0 of 0")
+        self.annotation_frame_counter.setObjectName("Muted")
+        self.annotation_previous_button = QPushButton("← Previous")
+        self.annotation_previous_button.clicked.connect(
+            lambda: self._step_annotation_frame(-1)
+        )
+        self.annotation_next_button = QPushButton("Next →")
+        self.annotation_next_button.clicked.connect(
+            lambda: self._step_annotation_frame(1)
+        )
+        frame_navigation.addWidget(self.annotation_frame_counter, 1)
+        frame_navigation.addWidget(self.annotation_previous_button)
+        frame_navigation.addWidget(self.annotation_next_button)
+        detail_layout.addLayout(frame_navigation)
         self.annotation_frame_metadata = QLabel("No frame selected")
         self.annotation_frame_metadata.setObjectName("Muted")
         self.annotation_frame_metadata.setWordWrap(True)
@@ -778,6 +793,9 @@ class MainWindow(QMainWindow):
             return
 
         self.annotation_frame_list.clear()
+        self.annotation_frame_counter.setText(f"Frame 0 of {len(frames)}")
+        self.annotation_previous_button.setEnabled(False)
+        self.annotation_next_button.setEnabled(len(frames) > 1)
         for frame in frames:
             timestamp = frame["timestamp_ms"]
             filename = frame["filename"]
@@ -790,9 +808,21 @@ class MainWindow(QMainWindow):
         )
         self.annotation_frame_list.setCurrentRow(0)
 
+    def _step_annotation_frame(self, delta: int) -> None:
+        count = self.annotation_frame_list.count()
+        if count == 0:
+            return
+        next_row = max(0, min(count - 1, self.annotation_frame_list.currentRow() + delta))
+        self.annotation_frame_list.setCurrentRow(next_row)
+
     def _on_annotation_frame_selected(self, item: QListWidgetItem | None, _previous=None) -> None:
         if item is None or self._annotation_manifest_path is None:
             return
+        row = self.annotation_frame_list.row(item)
+        count = self.annotation_frame_list.count()
+        self.annotation_frame_counter.setText(f"Frame {row + 1} of {count}")
+        self.annotation_previous_button.setEnabled(row > 0)
+        self.annotation_next_button.setEnabled(row < count - 1)
         timestamp_ms, filename = item.data(Qt.ItemDataRole.UserRole)
         frame_path = self._annotation_manifest_path.parent / filename
         self.annotation_frame_metadata.setText(
