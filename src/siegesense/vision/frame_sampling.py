@@ -59,8 +59,12 @@ def sample_video_frames(
     destination = Path(output_dir).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(f"Source recording does not exist: {source}")
-    if destination == source or source in destination.parents:
-        raise ValueError("Output directory must not be the source file or a parent of it")
+    if destination == source or destination == source.parent:
+        raise ValueError("Choose a separate output directory, not the source recording's folder")
+    if source in destination.parents:
+        raise ValueError("Output directory cannot be inside the source file path")
+    if destination.exists() and any(destination.iterdir()):
+        raise ValueError("Output directory must be empty to avoid overwriting previous samples")
     if start_ms < 0:
         raise ValueError("Start time must be zero or greater")
     if interval_ms <= 0:
