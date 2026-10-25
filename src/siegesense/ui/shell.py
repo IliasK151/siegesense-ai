@@ -682,6 +682,17 @@ class MainWindow(QMainWindow):
         experiment_form.addRow("Baseline snapshot", self.experiment_baseline_combo)
         experiment_form.addRow("Test snapshot", self.experiment_test_combo)
         experiment_layout.addLayout(experiment_form)
+        self.settings_comparison_label = QLabel(
+            "Choose baseline and test snapshots to inspect the exact setting differences."
+        )
+        self.settings_comparison_label.setWordWrap(True)
+        self.settings_comparison_label.setObjectName("Muted")
+        compare_button = QPushButton("Compare selected snapshots")
+        compare_button.clicked.connect(self._refresh_snapshot_comparison)
+        self.experiment_baseline_combo.currentIndexChanged.connect(self._refresh_snapshot_comparison)
+        self.experiment_test_combo.currentIndexChanged.connect(self._refresh_snapshot_comparison)
+        experiment_layout.addWidget(compare_button, 0, Qt.AlignmentFlag.AlignLeft)
+        experiment_layout.addWidget(self.settings_comparison_label)
         create_experiment = QPushButton("Record experiment")
         create_experiment.clicked.connect(self._create_settings_experiment)
         experiment_layout.addWidget(create_experiment, 0, Qt.AlignmentFlag.AlignLeft)
@@ -762,6 +773,44 @@ class MainWindow(QMainWindow):
             self.experiment_outcome_input.setEnabled(True)
             if self.settings_experiment_list.currentItem() is None:
                 self.settings_experiment_list.setCurrentRow(0)
+
+    def _refresh_snapshot_comparison(self, *_args: object) -> None:
+        """Show exact differences between the selected local settings snapshots."""
+        if not hasattr(self, "settings_comparison_label"):
+            return
+        baseline_id = self.experiment_baseline_combo.currentData()
+        test_id = self.experiment_test_combo.currentData()
+        if not baseline_id or not test_id:
+            self.settings_comparison_label.setText(
+                "Save at least two settings snapshots to compare a baseline with a test."
+            )
+            return
+        try:
+            snapshots = self.settings_service.list_snapshots() if self.settings_service else []
+        except (OSError, RuntimeError, sqlite3.Error) as error:
+            self.settings_comparison_label.setText(f"Could not load snapshots: {error}")
+            return
+        baseline = next((item for item in snapshots if item.id == baseline_id), None)
+        test = next((item for item in snapshots if item.id == test_id), None)
+        if baseline is None or test is None:
+            self.settings_comparison_label.setText("One of the selected snapshots is no longer available.")
+            return
+        keys = sorted(set(baseline.values) | set(test.values))
+        differences = [
+            (key, baseline.values.get(key, "—"), test.values.get(key, "—"))
+            for key in keys
+            if baseline.values.get(key) != test.values.get(key)
+        ]
+        if not differences:
+            self.settings_comparison_label.setText(
+                f"No differences found between “{baseline.label}” and “{test.label}”."
+            )
+            return
+        lines = [f"Comparison: {baseline.label} → {test.label}"]
+        for key, before, after in differences:
+            lines.append(f"• {key.replace('_', ' ').title()}: {before} → {after}")
+        lines.append(f"{len(differences)} setting(s) differ. This is a configuration comparison, not proof of performance improvement.")
+        self.settings_comparison_label.setText("\n".join(lines))
 
     def _load_selected_experiment(self, *_args: object) -> None:
         item = self.settings_experiment_list.currentItem()
