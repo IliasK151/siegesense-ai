@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 from siegesense.vision.annotations import ALLOWED_LABELS, load_dataset
@@ -97,3 +99,52 @@ def compare_annotators(
         observed_agreement=observed,
         cohens_kappa=kappa,
     )
+
+
+
+def write_evaluation_report(
+    output_path: str | Path,
+    datasets: Iterable[tuple[str, str | Path]],
+    *,
+    annotator_pairs: Iterable[tuple[str, str | Path, str | Path]] = (),
+) -> Path:
+    """Write a local JSON coverage/agreement report without model-performance claims."""
+    dataset_entries = tuple(datasets)
+    pair_entries = tuple(annotator_pairs)
+    output = Path(output_path).expanduser().resolve()
+    protected_inputs = {
+        Path(path).expanduser().resolve()
+        for _, path in dataset_entries
+    }
+    protected_inputs.update(
+        Path(path).expanduser().resolve()
+        for _, first, second in pair_entries
+        for path in (first, second)
+    )
+    if output in protected_inputs:
+        raise ValueError("Report output must not overwrite an annotation dataset")
+    summaries = summarize_datasets(dataset_entries)
+    agreements = []
+    for name, first_path, second_path in pair_entries:
+        if not name.strip():
+            raise ValueError("Agreement report name cannot be empty")
+        agreement = compare_annotators(first_path, second_path)
+        agreements.append({"name": name, **asdict(agreement)})
+    report = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "report_type": "annotation_coverage_and_agreement",
+        "model_performance_evaluated": False,
+        "datasets": [asdict(summary) for summary in summaries],
+        "annotator_agreement": agreements,
+        "limitations": [
+            "Agreement measures consistency, not correctness.",
+            "No automatic detector was trained or scored by this report.",
+            "Recording-level leakage checks cover the named datasets supplied.",
+        ],
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    temporary.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    temporary.replace(output)
+    return output
