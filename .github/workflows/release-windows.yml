@@ -3,6 +3,8 @@ name: Windows package
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "feat/annotated-sequence-metrics"
     tags:
       - "v*"
 
