@@ -7,8 +7,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from siegesense.storage.paths import default_database_path
-
 from siegesense.domain.models import (
     MetricResult,
     Observation,
@@ -17,6 +15,7 @@ from siegesense.domain.models import (
     SettingsExperiment,
     SettingsSnapshot,
 )
+from siegesense.storage.paths import default_database_path
 
 SCHEMA_VERSION = 1
 
