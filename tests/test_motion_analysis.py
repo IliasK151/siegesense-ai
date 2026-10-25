@@ -129,3 +129,42 @@ def test_motion_analysis_skips_mismatched_frame_dimensions(tmp_path: Path) -> No
     assert report.analyzed_pair_count == 0
     assert report.unusable_pair_count == 1
     assert report.median_motion_px_per_sample is None
+
+
+
+def test_motion_sampling_is_evenly_spaced_and_reports_subsampled_pairs(
+    tmp_path: Path,
+) -> None:
+    class FakeCV2:
+        IMREAD_GRAYSCALE = 0
+
+        def __init__(self) -> None:
+            self.read_paths: list[str] = []
+
+        def imread(self, path: str, _mode: int):
+            self.read_paths.append(Path(path).name)
+            return None
+
+    manifest = _write_manifest(
+        tmp_path,
+        frames=[
+            {"timestamp_ms": timestamp, "filename": f"frame_{timestamp:04d}.png"}
+            for timestamp in range(0, 1100, 100)
+        ],
+    )
+    fake_cv2 = FakeCV2()
+
+    report = analyze_manifest_motion(manifest, max_pairs=3, cv2_module=fake_cv2)
+
+    assert report.eligible_pair_count == 10
+    assert report.analyzed_pair_count == 0
+    assert report.unusable_pair_count == 3
+    assert report.subsampled_pair_count == 7
+    assert fake_cv2.read_paths == [
+        "frame_0000.png",
+        "frame_0100.png",
+        "frame_0400.png",
+        "frame_0500.png",
+        "frame_0900.png",
+        "frame_1000.png",
+    ]
