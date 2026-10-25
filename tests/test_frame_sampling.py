@@ -16,6 +16,8 @@ class FakeCapture:
         return True
 
     def get(self, prop: int) -> float:
+        if prop == 0:
+            return float(self.position_ms)
         return {5: 10.0, 3: 1920.0, 4: 1080.0, 7: 100.0}.get(prop, 0.0)
 
     def set(self, _prop: int, value: float) -> bool:
@@ -57,6 +59,8 @@ def test_sampling_writes_frames_and_manifest(tmp_path: Path) -> None:
     assert manifest["schema_version"] == 1
     assert manifest["source_sha256"] == report.source_sha256
     assert manifest["source_fps"] == 10.0
+    assert "requested seek-grid positions" in manifest["timestamp_policy"]
+    assert [frame["reported_position_ms"] for frame in manifest["frames"]] == [1000.0, 2000.0, 3000.0]
     assert FakeCaptureFactory.last_capture is not None
     assert FakeCaptureFactory.last_capture.released
 
@@ -92,3 +96,15 @@ def test_sampling_refuses_to_overwrite_existing_output(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="must be empty"):
         sample_video_frames(source, output, capture_factory=FakeCaptureFactory)
     assert existing.read_text(encoding="utf-8") == "do not overwrite"
+
+
+
+def test_sampling_rejects_non_integer_timing_values(tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"fake source recording")
+    with pytest.raises(ValueError, match="integer"):
+        sample_video_frames(source, tmp_path / "float-interval", interval_ms=100.5,
+                            capture_factory=FakeCaptureFactory)
+    with pytest.raises(ValueError, match="integer"):
+        sample_video_frames(source, tmp_path / "bool-start", start_ms=True,
+                            capture_factory=FakeCaptureFactory)
