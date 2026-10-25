@@ -36,7 +36,7 @@ Overview, Session Review, and Settings Lab have initial functional workflows. Ai
 - Safe migration from the original MVP remains blocked until its source and JSON schema are available
 - Automated tests and CI checks
 
-See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), [decisions](docs/DECISIONS.md), and the [release-readiness gate](docs/RELEASE_READINESS.md).
+See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md), [roadmap](docs/ROADMAP.md), [decisions](docs/DECISIONS.md), the [release-readiness gate](docs/RELEASE_READINESS.md), and the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for the staged path to a validated coaching product.
 
 ## Windows preview package
 
