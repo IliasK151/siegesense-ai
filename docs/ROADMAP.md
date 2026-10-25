@@ -55,7 +55,8 @@ Current baseline: the desktop app now supports local recorded-session review, ti
 - [ ] Define measurable vision use cases and ground truth
 - [x] Build an initial offline frame-sampling utility with manifest and tests
 - [x] Add schema-versioned local annotation data service with source-fingerprint validation
-- [ ] Build annotation UI and benchmark against real recordings
+- [x] Build initial graphical local frame annotation workflow
+- [ ] Benchmark annotation workflow and sampling against real recordings
 - [ ] Display method, units, confidence, and limitations
 - [ ] Add capabilities only after validation
 
