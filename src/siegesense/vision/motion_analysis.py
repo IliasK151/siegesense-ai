@@ -34,6 +34,7 @@ class MotionReport:
     eligible_pair_count: int
     analyzed_pair_count: int
     skipped_gap_pair_count: int
+    subsampled_pair_count: int
     unusable_pair_count: int
     median_motion_px_per_sample: float | None
     p90_motion_px_per_sample: float | None
@@ -93,8 +94,18 @@ def analyze_manifest_motion(
         if validated[index + 1][0] - validated[index][0] == interval
     ]
     gap_pairs = len(validated) - 1 - len(eligible)
-    stride = max(1, math.ceil(len(eligible) / max_pairs))
-    selected = eligible[::stride][:max_pairs]
+    if len(eligible) > max_pairs:
+        if max_pairs == 1:
+            selected = [eligible[len(eligible) // 2]]
+        else:
+            # Spread the configured sample budget across the entire recording.
+            selected = [
+                eligible[round(index * (len(eligible) - 1) / (max_pairs - 1))]
+                for index in range(max_pairs)
+            ]
+    else:
+        selected = eligible
+    subsampled = len(eligible) - len(selected)
 
     if cv2_module is None:
         try:
@@ -162,7 +173,7 @@ def analyze_manifest_motion(
         "This does not measure mouse input, true aim direction, target alignment, hit probability, or player skill.",
         "Only adjacent frames exactly one sampling interval apart are eligible; timestamp gaps are excluded.",
         "Coherent-feature ratio is the share of tracked points within 3 resized-image pixels of the median flow vector; it is not a validated camera-motion classifier.",
-        "When there are more eligible pairs than the configured limit, a deterministic stride subsamples them.",
+        "When there are more eligible pairs than the configured limit, a deterministic evenly spaced subset is analyzed; subsampled pairs are counted separately.",
     )
     return MotionReport(
         schema_version=1,
@@ -173,6 +184,7 @@ def analyze_manifest_motion(
         eligible_pair_count=len(eligible),
         analyzed_pair_count=len(results),
         skipped_gap_pair_count=gap_pairs,
+        subsampled_pair_count=subsampled,
         unusable_pair_count=unusable,
         median_motion_px_per_sample=(
             round(float(_percentile(magnitudes, 50)), 3) if magnitudes else None
