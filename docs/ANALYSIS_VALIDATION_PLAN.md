@@ -104,3 +104,8 @@ python -m siegesense.vision.report --dataset heldout=path/to/annotations.json --
 ```
 
 Repeat `--dataset NAME=PATH` for distinct recording-level splits. The command exits with a non-zero status on invalid inputs and never claims model performance.
+
+
+## Descriptive aim-frame summary
+
+Evaluation reports now include counts of manually labelled crosshair-on-target, crosshair-off-target, target-transition, ambiguous, and unusable frames. When at least one on-target/off-target frame exists, the report includes the on-target share among those selected, determinate labels. This is strictly a summary of frames a human chose to label: it is **not** aim accuracy, hit probability, or a representative estimate of gameplay performance. Sampling strategy and annotator selection can bias this share. Automatic detection and time-to-target measurement remain unimplemented pending higher-resolution clips and validation against reviewed events.
