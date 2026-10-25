@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -136,6 +136,29 @@ class AnnotationStore:
         self._annotations[annotation.annotation_id] = annotation
         self.save()
         return annotation
+
+    def update(
+        self,
+        annotation_id: str,
+        *,
+        label: str,
+        annotator: str,
+        note: str = "",
+    ) -> FrameAnnotation:
+        """Update a saved annotation's label and notes without changing its frame."""
+        existing = self._annotations.get(annotation_id)
+        if existing is None:
+            raise ValueError("Annotation does not exist")
+        _validate_annotation_fields(existing.timestamp_ms, label, annotator)
+        updated = replace(
+            existing,
+            label=label,
+            annotator=annotator.strip(),
+            note=note.strip(),
+        )
+        self._annotations[annotation_id] = updated
+        self.save()
+        return updated
 
     def remove(self, annotation_id: str) -> bool:
         """Remove one annotation and persist; return False if the ID was unknown."""
