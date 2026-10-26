@@ -12,17 +12,16 @@ Use Code → Download ZIP, then extract the folder to a normal local directory (
 
 ## 2. Install and launch
 
-Install Python 3.12 for Windows from python.org, including the Python Launcher. Open PowerShell in the extracted project folder and run:
+Install Python 3.12 for Windows from python.org, including the Python Launcher. Then double-click `START_SIEGESENSE.bat` in the extracted project folder. On first run, the launcher creates a local `.venv`, installs the application, test/lint tools, and OpenCV, and starts the app. The initial dependency installation needs an internet connection.
+
+You can also run the setup and launch steps from PowerShell:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup_windows.ps1
 .\scripts\run_windows.ps1
 ```
 
-The setup script creates a local .venv and installs the application, test/lint tools, and OpenCV. The execution-policy change applies only to the current PowerShell process. The first dependency installation needs an internet connection.
-
-To run the local tests and lint checks at any time:
+To run tests and lint, double-click `CHECK_SIEGESENSE.bat` or run this in PowerShell:
 
 ```powershell
 .\scripts\check_windows.ps1
