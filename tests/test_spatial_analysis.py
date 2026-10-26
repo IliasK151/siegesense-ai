@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from siegesense.vision.annotations import AnnotationStore, load_dataset
-from siegesense.vision.spatial_analysis import summarize_spatial_error
+from siegesense.vision.spatial_analysis import summarize_spatial_error, write_spatial_report
 
 
 def _manifest(path: Path) -> Path:
@@ -97,3 +97,39 @@ def test_legacy_annotation_records_without_coordinates_remain_supported(
     summary = summarize_spatial_error(dataset_path)
     assert summary.annotated_point_count == 0
     assert summary.median_distance_pct_frame_diagonal is None
+
+
+
+def test_spatial_report_exports_manual_offsets_and_limitations(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    dataset_path = tmp_path / "annotations.json"
+    store = AnnotationStore(manifest, dataset_path)
+    store.add(
+        0, "frame0.png", "crosshair_off_target", annotator="reviewer",
+        reticle_x=0.5, reticle_y=0.5, target_x=0.6, target_y=0.4,
+    )
+    output = tmp_path / "reports" / "spatial.json"
+
+    written = write_spatial_report(dataset_path, output)
+
+    report = json.loads(written.read_text(encoding="utf-8"))
+    assert report["report_type"] == "manual_spatial_offset"
+    assert report["automatic_detection_used"] is False
+    assert report["model_performance_evaluated"] is False
+    assert report["summary"]["annotated_point_count"] == 1
+    assert report["observations"][0]["horizontal_offset_pct"] == 10.0
+    assert report["observations"][0]["vertical_offset_pct"] == -10.0
+    assert "not mouse input" in " ".join(report["limitations"])
+
+
+def test_spatial_report_refuses_to_overwrite_annotation_dataset(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "annotations.json"
+    dataset_path.write_text(json.dumps({
+        "schema_version": 1, "annotations": [],
+    }), encoding="utf-8")
+    original = dataset_path.read_text(encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must not overwrite"):
+        write_spatial_report(dataset_path, dataset_path)
+
+    assert dataset_path.read_text(encoding="utf-8") == original
