@@ -4,8 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPixmap
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from siegesense.services.session_service import SessionService
@@ -69,6 +70,7 @@ def test_annotation_workspace_loads_frame_and_persists_label(
         assert "crosshair off target" in window.annotation_history_list.item(0).text()
         assert "Saved" in window.annotation_status.text()
         assert "off target: 1" in window.annotation_summary_label.text()
+        assert "consecutive off-target runs: 1" in window.annotation_summary_label.text()
         assert "not aim accuracy" in window.annotation_summary_label.text()
 
         report_path = frames_dir / "evaluation-report.json"
@@ -100,6 +102,7 @@ def test_annotation_workspace_loads_frame_and_persists_label(
         assert "deleted" in window.annotation_status.text().lower()
         assert "on target: 0" in window.annotation_summary_label.text()
         assert "off target: 0" in window.annotation_summary_label.text()
+        assert "consecutive off-target runs: 0" in window.annotation_summary_label.text()
     finally:
         window.close()
 
@@ -255,3 +258,78 @@ def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_p
     finally:
         window.close()
         database.close()
+
+
+
+def test_annotation_workspace_marks_and_updates_spatial_points(
+    app: QApplication, tmp_path: Path
+) -> None:
+    frames_dir = tmp_path / "sampled-points"
+    frames_dir.mkdir()
+    frame_name = "frame_000000000ms.png"
+    image = QPixmap(320, 180)
+    image.fill(Qt.GlobalColor.darkBlue)
+    assert image.save(str(frames_dir / frame_name))
+    manifest_path = frames_dir / "sampling_manifest.json"
+    manifest_path.write_text(json.dumps({
+        "schema_version": 1,
+        "source_path": str(tmp_path / "clip-points.mp4"),
+        "source_sha256": "points-test-fingerprint",
+        "source_fps": 30.0,
+        "source_width": 320,
+        "source_height": 180,
+        "duration_ms": 1000,
+        "start_ms": 0,
+        "end_ms": 1000,
+        "interval_ms": 100,
+        "frames": [{"timestamp_ms": 0, "frame_index": 0, "filename": frame_name}],
+    }), encoding="utf-8")
+
+    window = MainWindow()
+    window.resize(1300, 900)
+    window.show()
+    app.processEvents()
+    try:
+        window.annotation_manifest_input.setText(str(manifest_path))
+        window._load_annotation_manifest()
+        app.processEvents()
+        picker = window.annotation_frame_preview
+        rect = picker.displayed_image_rect()
+        assert not rect.isEmpty()
+
+        window.annotation_mark_reticle_button.click()
+        app.processEvents()
+        rect = picker.displayed_image_rect()
+        QTest.mouseClick(
+            picker, Qt.MouseButton.LeftButton,
+            pos=QPoint(round(rect.x() + rect.width() * 0.3),
+                       round(rect.y() + rect.height() * 0.4)),
+        )
+        window.annotation_mark_target_button.click()
+        app.processEvents()
+        rect = picker.displayed_image_rect()
+        QTest.mouseClick(
+            picker, Qt.MouseButton.LeftButton,
+            pos=QPoint(round(rect.x() + rect.width() * 0.7),
+                       round(rect.y() + rect.height() * 0.6)),
+        )
+        window._save_frame_annotation()
+
+        dataset_path = frames_dir / "annotations.json"
+        saved = json.loads(dataset_path.read_text(encoding="utf-8"))["annotations"][0]
+        assert saved["reticle_x"] == pytest.approx(0.3, abs=0.02)
+        assert saved["reticle_y"] == pytest.approx(0.4, abs=0.02)
+        assert saved["target_x"] == pytest.approx(0.7, abs=0.02)
+        assert saved["target_y"] == pytest.approx(0.6, abs=0.02)
+        assert "manual reticle/target point pairs: 1" in window.annotation_summary_label.text()
+
+        window.annotation_history_list.setCurrentRow(0)
+        window.annotation_clear_points_button.click()
+        window._update_selected_annotation()
+        updated = json.loads(dataset_path.read_text(encoding="utf-8"))["annotations"][0]
+        assert updated["reticle_x"] is None
+        assert updated["reticle_y"] is None
+        assert updated["target_x"] is None
+        assert updated["target_y"] is None
+    finally:
+        window.close()

@@ -109,3 +109,26 @@ Repeat `--dataset NAME=PATH` for distinct recording-level splits. The command ex
 ## Descriptive aim-frame summary
 
 Evaluation reports and the Clip Annotation workspace now include counts of manually labelled crosshair-on-target, crosshair-off-target, target-transition, ambiguous, and unusable frames. When at least one on-target/off-target frame exists, the report includes the on-target share among those selected, determinate labels. This is strictly a summary of frames a human chose to label: it is **not** aim accuracy, hit probability, or a representative estimate of gameplay performance. Sampling strategy and annotator selection can bias this share. Automatic detection and time-to-target measurement remain unimplemented pending higher-resolution clips and validation against reviewed events.
+
+
+
+## Implemented prototype: screen-space motion estimates
+
+`src/siegesense/vision/motion_analysis.py` estimates sparse optical flow between adjacent sampled images from a validated local sampling manifest. It downsizes images so their longest side is at most 640 pixels and reports per-pair median displacement, 90th-percentile feature displacement, tracked feature count, a descriptive coherent-feature ratio, eligible-pair count, skipped timestamp-gap count, and unusable-pair count. A configurable pair limit bounds runtime; when necessary, eligible pairs are subsampled at a deterministic stride. The Clip Annotation page can export this report to a separate JSON file.
+
+This is a descriptive visual-motion prototype, not a validated aim or movement metric. Camera motion, recoil animation, moving objects, effects, scene changes, and compression can affect estimates. The values are in resized-image pixels per sampled interval; they are not mouse-input measurements, world-space aim, reticle-to-target distance, hit probability, or player skill. Before using the output for coaching, benchmark it against manually reviewed footage across resolutions, frame rates, scopes, and recording conditions. Do not infer that a larger or smaller value is inherently better.
+
+
+The coherent-feature ratio is the fraction of tracked features whose displacement lies within 3 resized-image pixels of the median displacement vector. It may describe whether visible features moved in a similar direction, but is not a validated camera-motion classifier and must not be interpreted as aim quality. When eligible pairs exceed the configured processing cap, the analyzer selects a deterministic evenly spaced subset and reports the number subsampled separately from pairs skipped due to timestamp gaps and pairs that could not be analyzed.
+
+
+### Manual label-transition counts
+
+The sequence summary counts adjacent `crosshair_off_target`→`crosshair_on_target` and reverse transitions only when two annotated timestamps are exactly one known sampling interval apart. Timestamp gaps break adjacency; unknown intervals produce unavailable counts. These are descriptive counts of human labels, not automatic correction detection or aim-quality scores.
+
+
+## Manual reticle-to-target geometry prototype
+
+The annotation data layer now supports optional normalized reticle and target points (each x/y pair ranges from 0 to 1 relative to the full frame). `src/siegesense/vision/spatial_analysis.py` summarizes target-minus-reticle horizontal and vertical offsets as percentages of frame width/height, plus Euclidean distance as a percentage of the frame diagonal. It excludes frames without both points and reports explicit limitations.
+
+These points are manually supplied and are not yet captured by the graphical workspace. This prototype does not detect reticles or opponents and cannot determine overshoot/undershoot from a still frame. A follow-up UI slice must provide a reliable way to mark points, preserve aspect ratio while mapping clicks back to source-frame coordinates, and visualize the measured offsets before this can be useful in normal player workflow. Validate coordinate marking agreement before using the numbers for coaching.

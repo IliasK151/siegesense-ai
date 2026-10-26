@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from siegesense.vision.annotations import ALLOWED_LABELS, load_dataset
+from siegesense.vision.sequence_analysis import summarize_annotated_sequences
+from siegesense.vision.spatial_analysis import summarize_spatial_error
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +185,8 @@ def write_evaluation_report(
             {
                 **asdict(summary),
                 "aim_frame_summary": asdict(summarize_aim_frames(path)),
+                "sampled_sequence_summary": asdict(summarize_annotated_sequences(path)),
+                "manual_spatial_error_summary": asdict(summarize_spatial_error(path)),
             }
             for summary, (_, path) in zip(summaries, dataset_entries, strict=True)
         ],
@@ -191,6 +195,7 @@ def write_evaluation_report(
             "Agreement measures consistency, not correctness.",
             "The on-target share describes only manually selected crosshair-on/off-target frames; it is not aim accuracy or representative gameplay performance.",
             "No automatic detector was trained or scored by this report.",
+            "Spatial offsets use only manually supplied reticle/target points and do not measure mouse input or aim skill.",
             "Recording-level leakage checks cover the named datasets supplied.",
         ],
     }

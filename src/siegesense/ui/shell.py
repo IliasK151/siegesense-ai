@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from statistics import median
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QPixmap
@@ -38,9 +39,13 @@ from siegesense.services.export_service import (
 )
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
+from siegesense.ui.point_picker import PointPickerLabel
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
+from siegesense.vision.motion_analysis import analyze_manifest_motion, write_motion_report
+from siegesense.vision.sequence_analysis import summarize_annotated_sequences
+from siegesense.vision.spatial_analysis import summarize_spatial_error, write_spatial_report
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -52,6 +57,11 @@ NAV_ITEMS = [
     ("AI Coach", "✳", "Evidence-linked coaching, when available"),
     ("Preferences & Privacy", "☷", "Capture, data, and application preferences"),
 ]
+
+
+def _median_coherent_ratio(pairs: tuple) -> float:
+    """Return the median descriptive coherence ratio for analyzed frame pairs."""
+    return median(pair.coherent_feature_ratio for pair in pairs)
 
 
 def panel(title: str, body: str, *, object_name: str = "Panel") -> QFrame:
@@ -723,12 +733,40 @@ class MainWindow(QMainWindow):
         detail_layout.setContentsMargins(14, 14, 14, 14)
         detail_layout.setSpacing(10)
         detail_layout.addWidget(QLabel("Frame preview"))
-        self.annotation_frame_preview = QLabel("Load a manifest to preview sampled frames.")
-        self.annotation_frame_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.annotation_frame_preview = PointPickerLabel("Load a manifest to preview sampled frames.")
         self.annotation_frame_preview.setMinimumSize(280, 180)
         self.annotation_frame_preview.setObjectName("FramePreview")
         self.annotation_frame_preview.setWordWrap(True)
+        self.annotation_frame_preview.point_marked.connect(self._on_annotation_point_marked)
         detail_layout.addWidget(self.annotation_frame_preview, 1)
+        point_tools = QHBoxLayout()
+        self.annotation_mark_reticle_button = QPushButton("Mark reticle")
+        self.annotation_mark_reticle_button.setToolTip(
+            "Then click the visible center of the reticle in the full frame."
+        )
+        self.annotation_mark_reticle_button.clicked.connect(
+            lambda: self._start_annotation_point_mark("reticle")
+        )
+        self.annotation_mark_target_button = QPushButton("Mark target")
+        self.annotation_mark_target_button.setToolTip(
+            "Then click the chosen visual reference point on the visible opponent."
+        )
+        self.annotation_mark_target_button.clicked.connect(
+            lambda: self._start_annotation_point_mark("target")
+        )
+        self.annotation_clear_points_button = QPushButton("Clear points")
+        self.annotation_clear_points_button.clicked.connect(self._clear_annotation_points)
+        point_tools.addWidget(self.annotation_mark_reticle_button)
+        point_tools.addWidget(self.annotation_mark_target_button)
+        point_tools.addWidget(self.annotation_clear_points_button)
+        point_tools.addStretch(1)
+        detail_layout.addLayout(point_tools)
+        self.annotation_point_status = QLabel(
+            "Optional spatial review: mark the reticle and a visible target on this frame."
+        )
+        self.annotation_point_status.setObjectName("Muted")
+        self.annotation_point_status.setWordWrap(True)
+        detail_layout.addWidget(self.annotation_point_status)
         frame_navigation = QHBoxLayout()
         self.annotation_frame_counter = QLabel("Frame 0 of 0")
         self.annotation_frame_counter.setObjectName("Muted")
@@ -788,6 +826,18 @@ class MainWindow(QMainWindow):
         export_report_button = QPushButton("Export local evaluation report…")
         export_report_button.clicked.connect(self._export_annotation_report)
         history_layout.addWidget(export_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        spatial_report_button = QPushButton("Export manual spatial-offset report…")
+        spatial_report_button.setToolTip(
+            "Export offsets calculated only from manually marked reticle and target points."
+        )
+        spatial_report_button.clicked.connect(self._export_spatial_report)
+        history_layout.addWidget(spatial_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        motion_report_button = QPushButton("Analyze screen-space motion…")
+        motion_report_button.setToolTip(
+            "Estimate visible feature movement between adjacent sampled frames; this is not mouse input or an aim score."
+        )
+        motion_report_button.clicked.connect(self._analyze_annotation_motion)
+        history_layout.addWidget(motion_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.annotation_history_list = QListWidget()
         self.annotation_history_list.setMaximumHeight(150)
         self.annotation_history_list.currentItemChanged.connect(self._on_annotation_history_selected)
@@ -810,6 +860,49 @@ class MainWindow(QMainWindow):
         self._annotation_manifest: dict | None = None
         self._annotation_manifest_path: Path | None = None
         self._refresh_annotation_sessions()
+
+    def _analyze_annotation_motion(self) -> None:
+        """Estimate visual feature motion locally and export a transparent JSON report."""
+        manifest_path = self._annotation_manifest_path
+        if manifest_path is None or not manifest_path.is_file():
+            self.annotation_status.setText("Load a valid sampling manifest before analyzing motion.")
+            return
+        target, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export screen-space motion report",
+            "screen-motion-report.json",
+            "JSON report (*.json)",
+        )
+        if not target:
+            return
+        if not Path(target).suffix:
+            target = f"{target}.json"
+        try:
+            report = analyze_manifest_motion(manifest_path)
+            output = write_motion_report(report, target)
+        except Exception as error:
+            # OpenCV can raise its own exception type for damaged or unsupported images.
+            self.annotation_status.setText(f"Screen-space motion analysis failed: {error}")
+            return
+        pair_summary = (
+            f"Analyzed {report.analyzed_pair_count}/{report.eligible_pair_count} eligible pairs; "
+            f"subsampled: {report.subsampled_pair_count}; "
+            f"unusable: {report.unusable_pair_count}; "
+            f"timestamp-gap pairs excluded: {report.skipped_gap_pair_count}."
+        )
+        if report.median_motion_px_per_sample is None:
+            motion_summary = f"No usable adjacent frame pairs were available. {pair_summary}"
+        else:
+            motion_summary = (
+                f"Median visible-feature motion: {report.median_motion_px_per_sample:.2f} "
+                f"resized px/sample; 90th percentile: {report.p90_motion_px_per_sample:.2f}. "
+                f"Median per-pair coherent-feature ratio: "
+                f"{_median_coherent_ratio(report.pairs):.0%}. {pair_summary}"
+            )
+        self.annotation_status.setText(
+            f"Motion report saved to {output}. {motion_summary} "
+            "This is screen-space visual motion, not mouse input, aim accuracy, or a skill score."
+        )
 
     def _refresh_annotation_sessions(self) -> None:
         if not hasattr(self, "annotation_session_combo"):
@@ -1003,7 +1096,7 @@ class MainWindow(QMainWindow):
             self.annotation_frame_list.clear()
             self.annotation_history_list.clear()
             self._refresh_annotation_summary()
-            self.annotation_frame_preview.setText("Could not load this manifest.")
+            self.annotation_frame_preview.set_image_message("Could not load this manifest.")
             self.annotation_status.setText(f"Manifest not loaded: {error}")
             return
 
@@ -1045,24 +1138,20 @@ class MainWindow(QMainWindow):
             f"Timestamp: {timestamp_ms} ms  ·  File: {filename}"
         )
         if not frame_path.is_file():
-            self.annotation_frame_preview.setPixmap(QPixmap())
-            self.annotation_frame_preview.setText(
+            self.annotation_frame_preview.set_image_message(
                 "Frame image is missing. Re-run sampling or check the output folder."
             )
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
             return
         pixmap = QPixmap(str(frame_path))
         if pixmap.isNull():
-            self.annotation_frame_preview.setPixmap(QPixmap())
-            self.annotation_frame_preview.setText("This image could not be decoded.")
+            self.annotation_frame_preview.set_image_message("This image could not be decoded.")
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
             return
-        self.annotation_frame_preview.setText("")
-        self.annotation_frame_preview.setPixmap(
-            pixmap.scaled(
-                self.annotation_frame_preview.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        self.annotation_frame_preview.set_source_pixmap(pixmap)
+        self._restore_annotation_frame_points(timestamp_ms, filename)
 
     def resizeEvent(self, event) -> None:
         """Keep the selected frame preview fitted when the window is resized."""
@@ -1087,6 +1176,7 @@ class MainWindow(QMainWindow):
                 self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
             self.annotation_status.setText(f"Annotation not saved: {error}")
@@ -1096,6 +1186,35 @@ class MainWindow(QMainWindow):
         self._refresh_annotation_summary()
         self.annotation_status.setText(
             f"Saved {annotation.label.replace('_', ' ')} at {annotation.timestamp_ms} ms."
+        )
+
+    def _export_spatial_report(self) -> None:
+        """Export the current dataset's manually marked reticle/target offsets."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_status.setText(
+                "Load and save a local annotation dataset before exporting spatial offsets."
+            )
+            return
+        default_path = store.dataset_path.parent / "spatial-offset-report.json"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export manual spatial-offset report",
+            str(default_path),
+            "JSON report (*.json)",
+        )
+        if not output_path:
+            return
+        if not Path(output_path).suffix:
+            output_path = f"{output_path}.json"
+        try:
+            written = write_spatial_report(store.dataset_path, output_path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_status.setText(f"Spatial report export failed: {error}")
+            return
+        self.annotation_status.setText(
+            f"Manual spatial-offset report exported to {written}. "
+            "Only manually marked point pairs are included; this is not aim accuracy."
         )
 
     def _export_annotation_report(self) -> None:
@@ -1143,13 +1262,45 @@ class MainWindow(QMainWindow):
             return
         share = summary.on_target_share_of_labelled_frames
         share_text = "n/a" if share is None else f"{share:.0%}"
+        try:
+            sequence = summarize_annotated_sequences(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            sequence = None
+        if sequence is None or sequence.sampling_interval_ms is None:
+            sequence_text = "sampled run timing unavailable"
+        else:
+            longest = sequence.off_target_runs.longest_observed_span_ms
+            longest_text = "n/a" if longest is None else f"{longest} ms"
+            sequence_text = (
+                f"consecutive off-target runs: {sequence.off_target_runs.run_count}, "
+                f"longest observed sampled span: {longest_text}, "
+                f"adjacent off→on labels: {sequence.off_to_on_transitions}, "
+                f"adjacent on→off labels: {sequence.on_to_off_transitions}"
+            )
+        try:
+            spatial = summarize_spatial_error(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            spatial = None
+        if spatial is None or spatial.annotated_point_count == 0:
+            spatial_text = "manual reticle/target point pairs: 0"
+        else:
+            spatial_text = (
+                f"manual reticle/target point pairs: {spatial.annotated_point_count}, "
+                f"median target-minus-reticle offset: "
+                f"{spatial.median_horizontal_offset_pct:+.2f}% frame width horizontally, "
+                f"{spatial.median_vertical_offset_pct:+.2f}% frame height vertically, "
+                f"{spatial.median_distance_pct_frame_diagonal:.2f}% frame diagonal"
+            )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
             f"off target: {summary.crosshair_off_target_frames} · "
             f"selected-frame on-target share: {share_text} · "
             f"transitions: {summary.target_transition_frames} · "
             f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
-            "Descriptive only; not aim accuracy or representative gameplay performance."
+            f"{sequence_text}. {spatial_text}. "
+            "Observed sampled spans are not precise event durations. Spatial offsets use manually "
+            "marked points and are geometric measurements, not hit accuracy. Descriptive only; "
+            "not aim accuracy or representative gameplay performance."
         )
 
     def _refresh_annotation_history(self) -> None:
@@ -1188,10 +1339,87 @@ class MainWindow(QMainWindow):
             ):
                 self.annotation_frame_list.setCurrentRow(index)
                 break
+        self._set_annotation_spatial_points(annotation)
         self.annotation_status.setText(
             f"Editing label for {annotation.timestamp_ms / 1000:.2f}s. "
             "Change the fields above and select Update selected annotation."
         )
+
+    def _start_annotation_point_mark(self, mode: str) -> None:
+        if self._annotation_store is None or self.annotation_frame_list.currentItem() is None:
+            self.annotation_status.setText("Load a manifest and select a readable frame first.")
+            return
+        try:
+            self.annotation_frame_preview.set_marking_mode(mode)
+        except ValueError as error:
+            self.annotation_status.setText(str(error))
+            return
+        point_name = "reticle center" if mode == "reticle" else "chosen visible target reference point"
+        self.annotation_status.setText(
+            f"Click the {point_name} inside the image. Letterboxed margins are not part of the frame."
+        )
+
+    def _on_annotation_point_marked(self, mode: str, x: float, y: float) -> None:
+        point_name = "Reticle" if mode == "reticle" else "Target"
+        self._update_annotation_point_status()
+        self.annotation_status.setText(
+            f"{point_name} point marked at x={x:.1%}, y={y:.1%} of the full source frame. "
+            "Save a new annotation or update the selected one to persist the mark."
+        )
+
+    def _clear_annotation_points(self) -> None:
+        self.annotation_frame_preview.clear_points()
+        self._update_annotation_point_status()
+        self.annotation_status.setText(
+            "Point marks cleared from the current edit. Save or update the annotation to persist the change."
+        )
+
+    def _set_annotation_spatial_points(self, annotation) -> None:
+        reticle = (
+            (annotation.reticle_x, annotation.reticle_y)
+            if annotation.reticle_x is not None and annotation.reticle_y is not None
+            else None
+        )
+        target = (
+            (annotation.target_x, annotation.target_y)
+            if annotation.target_x is not None and annotation.target_y is not None
+            else None
+        )
+        self.annotation_frame_preview.set_points(reticle, target)
+        self._update_annotation_point_status()
+
+    def _restore_annotation_frame_points(self, timestamp_ms: int, filename: str) -> None:
+        store = self._annotation_store
+        if store is None:
+            self.annotation_frame_preview.clear_points()
+            self._update_annotation_point_status()
+            return
+        spatial_annotations = [
+            annotation for annotation in store.annotations
+            if annotation.timestamp_ms == timestamp_ms
+            and annotation.frame_filename == filename
+            and (
+                annotation.reticle_x is not None
+                or annotation.target_x is not None
+            )
+        ]
+        if spatial_annotations:
+            self._set_annotation_spatial_points(spatial_annotations[-1])
+        else:
+            self.annotation_frame_preview.set_points(None, None)
+            self._update_annotation_point_status()
+
+    def _update_annotation_point_status(self) -> None:
+        coordinates = self.annotation_frame_preview.point_coordinates()
+        reticle = (
+            "not marked" if coordinates["reticle_x"] is None
+            else f"x={coordinates['reticle_x']:.1%}, y={coordinates['reticle_y']:.1%}"
+        )
+        target = (
+            "not marked" if coordinates["target_x"] is None
+            else f"x={coordinates['target_x']:.1%}, y={coordinates['target_y']:.1%}"
+        )
+        self.annotation_point_status.setText(f"Reticle: {reticle}  ·  Target: {target}")
 
     def _update_selected_annotation(self) -> None:
         if self._annotation_store is None:
@@ -1208,6 +1436,7 @@ class MainWindow(QMainWindow):
                 label=self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
             self.annotation_status.setText(f"Annotation not updated: {error}")
@@ -1383,7 +1612,9 @@ class MainWindow(QMainWindow):
             if baseline_snapshot is not None and test_snapshot is not None:
                 setting_keys = set(baseline_snapshot.values) | set(test_snapshot.values)
                 difference_count = sum(
-                    baseline_snapshot.values.get(key) != test_snapshot.values.get(key)
+                    key not in baseline_snapshot.values
+                    or key not in test_snapshot.values
+                    or baseline_snapshot.values[key] != test_snapshot.values[key]
                     for key in setting_keys
                 )
                 comparison = f"{difference_count} setting change(s)"
@@ -1443,7 +1674,9 @@ class MainWindow(QMainWindow):
         differences = [
             (key, baseline.values.get(key, "—"), test.values.get(key, "—"))
             for key in keys
-            if baseline.values.get(key) != test.values.get(key)
+            if key not in baseline.values
+            or key not in test.values
+            or baseline.values[key] != test.values[key]
         ]
         if not differences:
             self.settings_comparison_label.setText(
