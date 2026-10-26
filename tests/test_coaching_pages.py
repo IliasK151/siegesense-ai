@@ -73,3 +73,23 @@ def test_coach_empty_state_asks_for_observations(app: QApplication) -> None:
     finally:
         window.close()
         database.close()
+
+
+
+def test_session_review_quick_tag_appends_without_duplicates(app: QApplication) -> None:
+    database = Database(":memory:")
+    service = SessionService(database)
+    service.create_session("Review")
+    window = MainWindow(session_service=service)
+    try:
+        window.observation_tags_input.setText("acog")
+        window.coaching_tag_combo.setCurrentIndex(
+            window.coaching_tag_combo.findData("overflick")
+        )
+        window.add_coaching_tag_button.click()
+        assert window.observation_tags_input.text() == "acog, overflick"
+        window.add_coaching_tag_button.click()
+        assert window.observation_tags_input.text() == "acog, overflick"
+    finally:
+        window.close()
+        database.close()
