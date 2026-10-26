@@ -1431,6 +1431,8 @@ class MainWindow(QMainWindow):
             return
 
         self.annotation_frame_list.clear()
+        # Prevent a target ID from a previous recording leaking into a new dataset.
+        self.annotation_target_track_input.clear()
         self.annotation_frame_counter.setText(f"Frame 0 of {len(frames)}")
         self.annotation_previous_button.setEnabled(False)
         self.annotation_next_button.setEnabled(len(frames) > 1)
