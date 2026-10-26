@@ -186,3 +186,8 @@ The manually tracked target-relative offset analysis from draft PR #15 is includ
 - report export protects the source video, manifest, annotation dataset, and sampled frame files from overwrite.
 
 This is additional review evidence, not automatic aim detection. Verification is still blocked by hosted runners being unavailable before any CI steps begin, and it remains unverified on the user's Windows PC.
+
+
+## Settings experiment context additions
+
+Settings Lab records mouse DPI and the active `MouseSensitivityMultiplierUnit` value alongside horizontal/vertical sensitivity and ADS multipliers. These are user-entered configuration context, not automatically detected from the mouse driver or game. Before saving a baseline, users must verify every field against their own active configuration; the app never applies changes.
