@@ -28,14 +28,12 @@ ADSMouseSensitivity3x=36
 
     imported = read_game_settings_ini(path)
 
-    assert imported.values == {
-        "horizontal": 6,
-        "vertical": 6,
-        "sensitivity_multiplier": pytest.approx(0.02),
-        "ads_sensitivity_multiplier": pytest.approx(0.02),
-        "ads_global": 57,
-        "ads_1x": 40,
-    }
+    assert imported.values["horizontal"] == 6
+    assert imported.values["vertical"] == 6
+    assert imported.values["sensitivity_multiplier"] == pytest.approx(0.02)
+    assert imported.values["ads_sensitivity_multiplier"] == pytest.approx(0.02)
+    assert imported.values["ads_global"] == 57
+    assert imported.values["ads_1x"] == 40
     assert imported.additional_ads_keys == (
         "adsmousesensitivity1xhalf",
         "adsmousesensitivity2x",
@@ -57,7 +55,7 @@ def test_uses_legacy_global_mouse_sensitivity_only_as_axis_fallback(tmp_path: Pa
     assert imported.values["vertical"] == 54
 
 
-def test_invalid_known_values_are_skipped_and_warned(tmp_path: Path) -> None:
+def test_invalid_known_values_are_rejected_when_no_supported_values_remain(tmp_path: Path) -> None:
     path = tmp_path / "GameSettings.ini"
     path.write_text(
         "[INPUT]\nMouseYawSensitivity=999\nMouseSensitivityMultiplierUnit=not-a-number\n",
