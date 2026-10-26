@@ -822,9 +822,10 @@ class MainWindow(QMainWindow):
         self.experiment_variable_input.setText(variable)
         self.show_page("Settings Lab")
         self.settings_status.setText(
-            f"Experiment draft prepared from {insight.title}. Save your current settings as "
-            "the baseline, change only the chosen variable for a test snapshot, then compare "
-            "the two snapshots before recording a result."
+            f"Experiment draft prepared from {insight.title}. Verify the displayed fields "
+            "against your actual in-game settings, save that as the baseline, change only "
+            "the chosen variable for a test snapshot, then compare the snapshots before "
+            "recording a result."
         )
         self.experiment_title_input.setFocus()
 
@@ -1482,6 +1483,7 @@ class MainWindow(QMainWindow):
             self._annotation_manifest = None
             self._annotation_store = None
             self._annotation_manifest_path = None
+            self.annotation_target_track_input.clear()
             self.annotation_frame_list.clear()
             self.annotation_history_list.clear()
             self._refresh_annotation_summary()
