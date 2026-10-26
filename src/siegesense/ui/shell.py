@@ -2105,7 +2105,7 @@ class MainWindow(QMainWindow):
         if imported.warnings:
             details.extend(imported.warnings)
         details.append("Review the populated fields, then save a baseline only after confirming them.")
-        self.settings_import_status.setText("\\n".join(details))
+        self.settings_import_status.setText("\n".join(details))
 
     def _save_settings_snapshot(self) -> None:
         if self.settings_service is None:
