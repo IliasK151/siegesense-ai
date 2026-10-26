@@ -115,7 +115,6 @@ _ALIASES: dict[str, str] = {
     "target transition": "target-switch",
     "target transitions": "target-switch",
     "crosshair placement": "crosshair-placement",
-    "crosshair placement": "crosshair-placement",
     "pre aim": "crosshair-placement",
     "preaim": "crosshair-placement",
     "placement": "crosshair-placement",
