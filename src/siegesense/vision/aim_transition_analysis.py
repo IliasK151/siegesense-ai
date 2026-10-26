@@ -175,6 +175,8 @@ def write_aim_transition_report(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         manifest = {}
+    if not isinstance(manifest, dict):
+        manifest = {}
 
     source_path = manifest.get("source_path")
     if isinstance(source_path, str) and source_path.strip():
@@ -254,6 +256,8 @@ def _resolve_sampling_interval(
             Path(manifest_path).expanduser().read_text(encoding="utf-8")
         )
     except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(manifest, dict):
         return None
     candidate = manifest.get("interval_ms")
     if (
