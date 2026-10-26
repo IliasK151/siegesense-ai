@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from siegesense.domain.models import ObservationKind
-from siegesense.services.coaching_service import build_coaching_insights
+from siegesense.services.coaching_service import COACHING_TAG_GUIDE, build_coaching_insights
 from siegesense.services.export_service import (
     render_session_csv,
     render_session_json,
@@ -686,8 +686,8 @@ class MainWindow(QMainWindow):
             )
             self.coach_evidence_list.addItem("No real-session observations are available yet.")
             self.coach_pattern_detail.setText(
-                "Suggested tags: overflick, underflick, target-switch, crosshair-placement, "
-                "correction, recoil, movement, positioning, decision. Only tag what you can actually see."
+                "Suggested tags: " + ", ".join(COACHING_TAG_GUIDE)
+                + ". Only tag what you can actually see."
             )
             return
 
@@ -713,7 +713,8 @@ class MainWindow(QMainWindow):
         if not insights:
             self.coach_pattern_list.addItem(
                 "No explicit coaching tags yet. In Session Review, try: "
-                "overflick, underflick, target-switch, crosshair-placement, correction, recoil, movement."
+                + ", ".join(COACHING_TAG_GUIDE)
+                + "."
             )
             self.coach_pattern_detail.setText(
                 "Scope tags such as acog and close-range remain useful context, but they do not create a coaching claim by themselves."
@@ -931,6 +932,17 @@ class MainWindow(QMainWindow):
         observation_form.addRow("Tags", self.observation_tags_input)
         observation_form.addRow("Observation", self.observation_text)
         review_layout.addLayout(observation_form)
+        quick_tag_row = QHBoxLayout()
+        quick_tag_row.addWidget(QLabel("Add a coaching tag:"))
+        self.coaching_tag_combo = QComboBox()
+        for tag in COACHING_TAG_GUIDE:
+            self.coaching_tag_combo.addItem(tag.replace("-", " ").title(), tag)
+        quick_tag_row.addWidget(self.coaching_tag_combo, 1)
+        self.add_coaching_tag_button = QPushButton("Add tag")
+        self.add_coaching_tag_button.setObjectName("SecondaryButton")
+        self.add_coaching_tag_button.clicked.connect(self._append_selected_coaching_tag)
+        quick_tag_row.addWidget(self.add_coaching_tag_button)
+        review_layout.addLayout(quick_tag_row)
         review_layout.addWidget(self.observation_filter_input)
         add_note = QPushButton("Add observation")
         add_note.clicked.connect(self._add_review_observation)
@@ -2326,6 +2338,29 @@ class MainWindow(QMainWindow):
         self.review_media_player.pause()
         self.observation_timestamp.setValue(milliseconds // 1000)
         self.review_status.setText(f"Jumped to observation at {timestamp}.")
+
+    def _append_selected_coaching_tag(self) -> None:
+        """Append a supported coaching tag without duplicating an existing tag."""
+        if not hasattr(self, "coaching_tag_combo") or not hasattr(self, "observation_tags_input"):
+            return
+        selected = self.coaching_tag_combo.currentData()
+        if not selected:
+            return
+        tags = [
+            tag.strip()
+            for tag in self.observation_tags_input.text().split(",")
+            if tag.strip()
+        ]
+        normalized_existing = {
+            " ".join(tag.casefold().replace("_", " ").replace("-", " ").split())
+            for tag in tags
+        }
+        normalized_selected = " ".join(
+            str(selected).casefold().replace("_", " ").replace("-", " ").split()
+        )
+        if normalized_selected not in normalized_existing:
+            tags.append(str(selected))
+            self.observation_tags_input.setText(", ".join(tags))
 
     def _add_review_observation(self) -> None:
         if self.session_service is None:
