@@ -62,6 +62,16 @@ QFrame#Panel, QFrame#MetricCard {
     border: 1px solid #E8EAF0;
     border-radius: 14px;
 }
+QFrame#VideoDropZone {
+    background: #FCFCFF;
+    border: 2px dashed #CFCBFB;
+    border-radius: 14px;
+}
+QFrame#VideoDropZone QLabel { background: transparent; }
+QFrame#VideoDropZone:hover {
+    background: #F7F6FF;
+    border-color: #8B7FF0;
+}
 QLabel#PanelTitle { font-size: 14px; font-weight: 750; }
 QLabel#MetricLabel { color: #737989; font-size: 11px; font-weight: 650; }
 QLabel#MetricValue { color: #20232B; font-size: 25px; font-weight: 750; }
