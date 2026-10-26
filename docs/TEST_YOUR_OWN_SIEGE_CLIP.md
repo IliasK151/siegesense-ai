@@ -1,88 +1,71 @@
-# Test SiegeSense AI with your own Siege recording
+# Test SiegeSense AI with your own Siege recording (Windows)
 
-This is the fastest path to test the current preview on Windows. It processes a recording saved to disk; it does not observe live gameplay, read game memory, overlay the game, or control your mouse.
+This preview reviews recordings saved to disk. It does not attach to live gameplay, read protected game memory, overlay the game, or control your mouse. Aim-related summaries are manual-review evidence—not automatic aim diagnosis.
 
-## 1. Get the source
+## 1. Download the current build
 
-Open the private repository while signed in to GitHub:
+While signed in to the private GitHub repository, open:
 
-https://github.com/IliasK151/siegesense-ai/tree/feat/annotated-sequence-metrics
+https://github.com/IliasK151/siegesense-ai/tree/feat/usable-coach-workflow
 
-Use Code → Download ZIP, then extract the folder to a normal local directory (for example, C:\Dev\siegesense-ai). Keep recordings, sampled frames, annotation files, and reports outside Git.
+Choose **Code → Download ZIP**, then extract it into a **new folder** such as \`C:\Dev\siegesense-ai-coach\`. Do not reuse the older extracted folder; it will not magically update. Keep recordings, sampled frames, annotations and reports outside Git.
 
-## 2. Install and launch
+## 2. Run setup and checks
 
-Install Python 3.12 for Windows from python.org, including the Python Launcher. Then double-click `START_SIEGESENSE.bat` in the extracted project folder. On first run, the launcher creates a local `.venv`, installs the application, test/lint tools, and OpenCV, and starts the app. The initial dependency installation needs an internet connection.
+You already installed Python 3.12. Open the new extracted folder and double-click \`CHECK_SIEGESENSE.bat\`. It creates no game changes; it runs the local test/lint check if the app environment is present. If it says the environment is missing, double-click \`START_SIEGESENSE.bat\` first, allow it to install project dependencies with your internet connection, close the app after it opens, then run \`CHECK_SIEGESENSE.bat\`.
 
-You can also run the setup and launch steps from PowerShell:
-
-```powershell
-.\scripts\setup_windows.ps1
-.\scripts\run_windows.ps1
-```
-
-To run tests and lint, double-click `CHECK_SIEGESENSE.bat` or run this in PowerShell:
-
-```powershell
-.\scripts\check_windows.ps1
-```
-
-To build a local Windows x64 preview ZIP after those checks pass:
-
-```powershell
-.\scripts\package_windows.ps1
-```
-
-The ZIP is written to dist\SiegeSenseAI-Windows-x64.zip. The package script runs the test/lint checks and a packaged-app startup smoke test before creating the ZIP. This local package still needs a real-media playback check on the machine where it will be used.
+If either file exits with an error, copy the entire terminal output. Do not assume a startup alone means tests or video playback passed.
 
 ## 3. Prepare a short recording
 
-Use a short clip from a match you recorded and are allowed to analyze. Start with a clip where the reticle and opponent are reasonably visible. Make sure the recording file plays in a normal media player first. Do not add the video or sampled images to the Git repository.
+Use a short match recording you are allowed to review. Choose a clip where the reticle and visible opponents are reasonably clear, and verify the video opens in a normal media player first. Do not add the recording or sampled images to the repository.
 
 ## 4. Sample the video
 
-1. In SiegeSense AI, open **Clip Annotation**.
-2. Choose **Select gameplay video** and select the recording.
-3. Choose a new, empty output folder, or keep the suggested video-name frames folder.
-4. Leave the sampling interval at its default **100 ms** for the first pass, then choose **Sample frames**. Sampling at 100 ms yields about 10 sampled frames per second when successful; it can miss faster events and is not precise flick timing.
-5. If sampling succeeds, the generated sampling_manifest.json should load into the annotation workspace automatically. If it does not, use the manifest picker to select it.
+1. Open **Clip Annotation**.
+2. Choose **Select gameplay video** and select your recording.
+3. Choose a new, empty output folder, or use the suggested frames folder.
+4. Keep the default **100 ms** sampling interval for the first run, then click **Sample frames**.
+5. If the manifest does not load automatically, select the generated \`sampling_manifest.json\`.
 
-Use a separate output folder for each recording or sampling run. Do not select the source recording itself as the output folder.
+At 100 ms the sampler aims for roughly 10 frames per second. It may miss fast events and is not precise flick timing. Use a new output folder per recording/run; never select the source recording itself as the output folder.
 
-## 5. Review a small sequence
+## 5. Mark a small sequence
 
-1. Select a readable frame and add the best label for what is actually visible. Use **ambiguous** or **unusable frame** rather than guessing.
-2. For spatial review, choose **Mark reticle**, click the visible reticle center, choose **Mark target**, and click a consistent reference point on the opponent (for example, torso center). Save the annotation after marking the points.
-3. Review adjacent sampled frames when considering movement. A still frame or a pair of sparse samples cannot prove that the mouse overshot, a shot missed, or a sensitivity value is wrong.
-4. Save several annotations and try moving to another frame and back to confirm that the local marks persisted.
+1. Select a readable frame and assign the best label for what is actually visible. Use **ambiguous** or **unusable** instead of guessing.
+2. For spatial review, choose **Mark reticle**, click the reticle center, choose **Mark target**, and click a consistent reference point on the opponent.
+3. Enter the same **Target / sequence ID** only for frames where you can confidently identify the same visible opponent throughout one continuous sequence. Leave it blank when identity is uncertain.
+4. Save the annotation. Review two or more adjacent samples and confirm the labels and marks persist when you switch frames.
 
-Follow the annotation guide (ANNOTATION_GUIDE.md) for label definitions and point-marking limitations.
+These coordinates and IDs are manually entered. The app does not automatically detect or track opponents.
 
-## 6. Export and check the results
+## 6. Export and interpret reports cautiously
 
-Use **Export local evaluation report…** to save a JSON report. The spatial report summarizes manually marked target-minus-reticle offsets. For adjacent frames showing the same clearly identifiable opponent, enter the same short **Target / sequence ID** (for example, `target-a`) before saving each annotation. Leave the field blank when you cannot confidently track the same opponent. The aim-transition report counts offset sign changes only when the same manually assigned target ID is present on consecutive samples at the known sampling interval. **Analyze screen-space motion…** exports visible image-feature motion, which is not mouse input.
+Use **Export local evaluation report…** for annotation coverage. The spatial report describes manually marked target-minus-reticle offsets. **Export manual aim-transition report…** counts horizontal/vertical offset sign changes only when the same manual target ID has complete point pairs at exactly one known sample interval apart. **Analyze screen-space motion…** estimates visible image-feature displacement between frames.
 
-The current reports are experimental/manual-analysis outputs. They are not automatic reticle detection, opponent detection, mouse-input measurement, validated overshoot detection, aim accuracy, hit probability, rank, or skill scores.
+None of these metrics measures mouse input, proves overflick/underflick, determines hit/miss, or gives an aim-accuracy or skill score. Camera motion, opponent movement, animation and sparse sampling can confound the measurements. Treat reports as prompts to inspect the original video.
 
-## 7. Try the coaching-to-settings loop
+## 7. Try the review-to-coaching workflow
 
-1. Open **Session Review**, create a real review session, and link a saved Clip Annotation to it or add timestamped observations directly.
-2. When recording a review note, use the **Add a coaching tag** dropdown for what is visible (for example, `overflick`, `underflick`, `crosshair-placement`, `movement`, or `positioning`). Do not tag a clip with a diagnosis you cannot support.
-3. Open **AI Coach**. Select a tagged pattern to read its evidence level, source notes, and one practice block.
-4. A single note should not enable a settings experiment. When an overflick, underflick, or correction tag appears in multiple sessions, the coach can offer **Prepare a controlled settings experiment**. It fills a draft only; it does not assert that your current sensitivity is wrong.
-5. Open **Settings Lab**. Confirm every displayed value against the actual game/mouse configuration before saving a baseline. The settings fields include horizontal/vertical sensitivity, ADS values, mouse DPI, and `MouseSensitivityMultiplierUnit`. Save a baseline snapshot, change exactly one game setting yourself, save a test snapshot, select the pair, and compare them. Keep scope, weapon, range, and drill as similar as practical. Record the observed result, including inconclusive results.
+1. Open **Session Review** and create/select a real review session.
+2. Add a concise timestamped observation and use **Add a coaching tag** for only what you can support from the footage (for example, \`overflick\`, \`underflick\`, \`crosshair-placement\`, \`movement\`, or \`positioning\`).
+3. Open **AI Coach** and select a pattern to see the evidence level, linked notes, and one practice block.
+4. A single note is not a recurring pattern. The experiment handoff is enabled only for supported aim tags across multiple sessions; it creates an editable hypothesis and never claims the current setting is wrong.
 
-The preview never changes game configuration or mouse software settings. Legacy snapshots saved before the DPI/multiplier fields were added may not be comparable with new full snapshots; create a fresh pair of baseline/test snapshots for experiments.
+This is deterministic, tag-based guidance—not a trained AI model or automatic reticle/opponent detector.
 
-## 8. What to send back when something fails
+## 8. Import settings safely and compare experiments
 
-Keep the recording private. Report the exact step that failed, the full error message, your Windows version, python --version from the active virtual environment, and whether the check_windows.ps1 script passes. Do not upload a recording or screenshots containing sensitive information unless you explicitly choose to share them.
+In **Settings Lab**, click **Import GameSettings.ini…** and choose the active profile file. The common default location is:
 
-For a sampling or playback problem, also mention the file type (for example, MP4 or MKV), video resolution, nominal frame rate, whether a normal media player can play it, and whether other clips work. Avoid sharing the video itself unless necessary and explicitly intended.
+\`Documents\My Games\Rainbow Six - Siege\<profile-id>\GameSettings.ini\`
 
+Ubisoft documents this location in its [PC data-centre settings guide](https://www.ubisoft.com/en-us/help/rainbow-six-siege/purchases-and-rewards/article/changing-your-data-centre-manually-in-rainbow-six-siege-pc/000060594). The importer is read-only: it never writes or applies changes to the game.
 
-## Import the real settings before an experiment
+The importer maps only known fields: horizontal/vertical sensitivity, \`MouseSensitivityMultiplierUnit\`, \`ADSMouseMultiplierUnit\`, global ADS sensitivity, and the exact 1x ADS key. It does **not** assume a config key named \`2x\` or \`3x\` corresponds to a UI field named \`2.5x\`, \`3.5x\`, or \`8x\`. Those fields are left for manual confirmation. DPI is not in \`GameSettings.ini\`; verify it in your mouse software and enter it yourself.
 
-The Settings Lab **Import GameSettings.ini…** button reads a selected configuration file without changing it. The default Windows location is commonly `Documents\My Games\Rainbow Six - Siege\<profile-id>\GameSettings.ini`; Ubisoft documents this path in its [PC data-centre settings guide](https://www.ubisoft.com/en-us/help/rainbow-six-siege/purchases-and-rewards/article/changing-your-data-centre-manually-in-rainbow-six-siege-pc/000060594).
+Review every populated and unchanged field against the active in-game configuration before saving a baseline. Save a fresh baseline and test snapshot with the same context, change exactly one value yourself, then compare the pair and record what you observed—including inconclusive results. Old snapshots may not contain the new DPI/multiplier fields, so create a fresh pair for new experiments. The tool never edits your game config or mouse settings.
 
-The importer maps only explicit entries it can safely associate with the fields: horizontal/vertical sensitivity, `MouseSensitivityMultiplierUnit`, `ADSMouseMultiplierUnit`, global ADS sensitivity, and the exact 1x ADS key. It reports but does not guess other per-scope keys (for example, a `2x` key is not assumed to mean a `2.5x` UI value). DPI is not in `GameSettings.ini`, so verify it in your mouse software and enter it manually. Confirm all fields against your in-game settings before saving snapshots. The importer only reads; it never applies settings or writes to the game.
+## 9. If anything fails
+
+Keep the recording private. Send the exact step, the full error message, your Windows version, \`py -3.12 --version\`, and the output from \`CHECK_SIEGESENSE.bat\`. For video problems, also report the file type (MP4/MKV/etc.), resolution and nominal frame rate, whether the recording plays in a normal player, and whether another clip works. Do not send the recording itself unless you explicitly choose to share it.
