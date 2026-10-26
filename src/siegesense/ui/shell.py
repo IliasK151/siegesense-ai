@@ -647,6 +647,21 @@ class MainWindow(QMainWindow):
         self.coach_pattern_detail.setObjectName("Muted")
         self.coach_pattern_detail.setWordWrap(True)
         coach_layout.addWidget(self.coach_pattern_detail)
+        self.coach_plan_experiment_button = QPushButton(
+            "Prepare a controlled settings experiment"
+        )
+        self.coach_plan_experiment_button.setObjectName("SecondaryButton")
+        self.coach_plan_experiment_button.setEnabled(False)
+        self.coach_plan_experiment_button.setToolTip(
+            "Enabled only for repeated sensitivity-related tags across multiple sessions. "
+            "This prepares a test hypothesis; it does not recommend or apply a settings value."
+        )
+        self.coach_plan_experiment_button.clicked.connect(
+            self._prepare_settings_experiment_from_coach
+        )
+        coach_layout.addWidget(
+            self.coach_plan_experiment_button, 0, Qt.AlignmentFlag.AlignLeft
+        )
 
         coach_layout.addWidget(QLabel("Recent evidence"))
         self.coach_evidence_list = QListWidget()
@@ -663,6 +678,7 @@ class MainWindow(QMainWindow):
         self.coach_prompt_list.clear()
         self.coach_pattern_list.clear()
         self.coach_evidence_list.clear()
+        self.coach_plan_experiment_button.setEnabled(False)
         self._coaching_insights_by_key = {}
         try:
             sessions = self.session_service.list_sessions() if self.session_service else []
@@ -752,7 +768,12 @@ class MainWindow(QMainWindow):
         key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         insight = self._coaching_insights_by_key.get(key) if key else None
         if insight is None:
+            self.coach_plan_experiment_button.setEnabled(False)
             return
+        self.coach_plan_experiment_button.setEnabled(
+            insight.evidence_level == "Recurring across sessions"
+            and insight.key in {"overflick", "underflick", "correction"}
+        )
         evidence_lines: list[str] = []
         for session, observation in insight.evidence[:3]:
             seconds = observation.timestamp_ms // 1000
@@ -768,6 +789,44 @@ class MainWindow(QMainWindow):
             "Do not change sensitivity based on this prompt alone. Compare similar situations and "
             "record the result before deciding whether to run a settings experiment."
         )
+
+    def _prepare_settings_experiment_from_coach(self) -> None:
+        """Transfer recurring manually tagged aim evidence into an editable experiment draft."""
+        item = self.coach_pattern_list.currentItem()
+        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        insight = self._coaching_insights_by_key.get(key) if key else None
+        if (
+            insight is None
+            or insight.evidence_level != "Recurring across sessions"
+            or insight.key not in {"overflick", "underflick", "correction"}
+        ):
+            return
+
+        tags = {
+            " ".join(tag.casefold().replace("_", " ").replace("-", " ").split())
+            for _session, observation in insight.evidence
+            for tag in observation.tags
+        }
+        variable = (
+            "2.5x ADS sensitivity"
+            if any("acog" in tag or "2.5x" in tag for tag in tags)
+            else "horizontal sensitivity"
+        )
+        self.experiment_title_input.setText(f"Coach follow-up: {insight.title}")
+        self.experiment_hypothesis_input.setText(
+            f"After reviewing {insight.observation_count} manually tagged instances across "
+            f"{insight.session_count} sessions, compare similar drills with one small change "
+            f"to {variable}; keep every other setting fixed. This is a test hypothesis, not "
+            "a recommendation that the setting is wrong."
+        )
+        self.experiment_variable_input.setText(variable)
+        self.show_page("Settings Lab")
+        self.settings_status.setText(
+            f"Experiment draft prepared from {insight.title}. Save your current settings as "
+            "the baseline, change only the chosen variable for a test snapshot, then compare "
+            "the two snapshots before recording a result."
+        )
+        self.experiment_title_input.setFocus()
 
     def _refresh_overview(self) -> None:
         """Refresh overview counts and review focus from real local records only."""
