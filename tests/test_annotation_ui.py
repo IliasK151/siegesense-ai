@@ -237,7 +237,9 @@ def test_dropping_video_automatically_samples_and_opens_review(
         )
 
     monkeypatch.setattr("siegesense.ui.shell.sample_video_frames", fake_sample_video_frames)
-    window = MainWindow()
+    database = Database(":memory:")
+    service = SessionService(database)
+    window = MainWindow(session_service=service)
     try:
         window._start_video_review(str(source))
         assert not window.annotation_sampling_progress.isHidden()
@@ -251,12 +253,23 @@ def test_dropping_video_automatically_samples_and_opens_review(
         assert window.annotation_frame_list.count() == 1
         assert window.annotation_frame_list.currentRow() == 0
         assert "Review ready" in window.annotation_status.text()
-        assert "Clip Annotation" in window.breadcrumb.text()
+        assert "Session Review" in window.breadcrumb.text()
         assert window.annotation_manifest_input.text().endswith("sampling_manifest.json")
         assert Path(window.annotation_output_input.text()).is_dir()
         assert window.annotation_sampling_progress.isHidden()
+
+        sessions = service.list_sessions()
+        assert len(sessions) == 1
+        assert Path(sessions[0].media_path).resolve() == source.resolve()
+        assert window.review_session_combo.currentData() == sessions[0].id
+        assert window.review_sampled_frames_button.isEnabled()
+        assert window.review_media_player.source().toLocalFile() == str(source.resolve())
+
+        window._open_sampled_frame_review()
+        assert "Clip Annotation" in window.breadcrumb.text()
     finally:
         window.close()
+        database.close()
 
 
 def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_path: Path) -> None:
