@@ -109,3 +109,24 @@ def test_settings_lab_rejects_multiple_setting_changes(app: QApplication, monkey
     finally:
         window.close()
         database.close()
+
+
+
+def test_settings_lab_records_dpi_and_mouse_sensitivity_multiplier(app: QApplication) -> None:
+    database = Database(":memory:")
+    service = SettingsService(database)
+    window = MainWindow(settings_service=service)
+    try:
+        window.settings_label_input.setText("Verified baseline")
+        window.settings_spinboxes["mouse_dpi"].setValue(800)
+        window.settings_spinboxes["sensitivity_multiplier"].setValue(0.02)
+        window._save_settings_snapshot()
+
+        snapshot = service.list_snapshots()[0]
+        assert snapshot.values["mouse_dpi"] == 800
+        assert snapshot.values["sensitivity_multiplier"] == pytest.approx(0.02)
+        assert snapshot.values["horizontal"] == 6
+        assert snapshot.values["ads_2_5x"] == 44
+    finally:
+        window.close()
+        database.close()
