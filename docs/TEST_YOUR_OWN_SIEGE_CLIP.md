@@ -20,16 +20,12 @@ If either file exits with an error, copy the entire terminal output. Do not assu
 
 Use a short match recording you are allowed to review. Choose a clip where the reticle and visible opponents are reasonably clear, and verify the video opens in a normal media player first. Do not add the recording or sampled images to the repository.
 
-## 4. Sample the video
+## 4. Start a review with drag and drop
 
-1. Open **Clip Annotation**.
-2. Choose **Select gameplay video** and select your recording.
-3. Choose a new, empty output folder, or use the suggested frames folder.
-4. Keep the default **100 ms** sampling interval for the first run, then click **Sample frames**.
-5. If the manifest does not load automatically, select the generated \`sampling_manifest.json\`.
-
-At 100 ms the sampler aims for roughly 10 frames per second. It may miss fast events and is not precise flick timing. Use a new output folder per recording/run; never select the source recording itself as the output folder.
-
+1. On the **Overview** screen, drag your video onto the large drop area, or click **Choose a video**. You can also open **Clip Annotation** and use the same drop area there.
+2. SiegeSense automatically creates a new review folder beside the recording, samples frames locally at the default **500 ms** interval (about 2 frames per second), loads the generated manifest, and opens **Clip Annotation** on the first frame.
+3. Sampling happens in the background so the window stays responsive. Very long recordings can still take some time and disk space. The original video is never changed or uploaded.
+4. Use **Advanced options** only when you need to change the sampling interval, choose another output folder, or open an existing \`sampling_manifest.json\`. The default interval is intended for browsing and manual review, not precise event timing.
 ## 5. Mark a small sequence
 
 1. Select a readable frame and assign the best label for what is actually visible. Use **ambiguous** or **unusable** instead of guessing.
