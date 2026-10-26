@@ -24,7 +24,7 @@ The items below describe work present on the current working branch as recorded 
 - Link annotations to a session review observation with timestamps and tags.
 - Local video sampling workflow with selectable output folder and interval, plus manifest loading.
 - Annotation summary refresh and JSON evaluation report export.
-- Sequence summaries for consecutive manually labelled on/off-target runs, movement markers, and timestamp gaps.
+- Sequence summaries for consecutive manually labelled on/off-target runs, movement markers, timestamp gaps, and adjacent off-target→on-target / on-target→off-target label transitions when sampling timing is known. These are label-transition counts, not validated aim-correction metrics.
 - Runs break on missing intervals/gaps; unlabelled frames are not interpolated. Sampled span is not represented as exact event duration.
 
 ### Evaluation and experiment integrity
@@ -42,16 +42,24 @@ The items below describe work present on the current working branch as recorded 
 - Path traversal checks for POSIX and Windows manifest paths; report export avoids overwriting the source manifest.
 - The metric describes movement of visible image features only. It is not mouse input, true aim direction, reticle-to-target distance, opponent detection, aim accuracy, or player skill. Camera motion, recoil animation, moving objects, effects, scene changes, and compression can confound it.
 
+### Manual spatial annotation prototype
+- Click-to-mark tools let a reviewer mark reticle center and a chosen target reference point on a sampled frame; coordinates are normalized to the full frame, including when the preview is letterboxed.
+- Annotation storage validates optional coordinate pairs and supports older annotation records without coordinates.
+- The UI shows descriptive target-minus-reticle offsets and can export a manual spatial-offset JSON report.
+- These are human-marked still-frame geometry measurements. They do not detect the reticle/opponents automatically or establish overshoot, undershoot, mouse movement, aim accuracy, or player skill.
+
 ### Documentation and automated checks
 - README, annotation guide, analysis validation plan, and roadmap describe the current limitations.
 - CI has previously passed on Python 3.10, 3.11, and 3.12 for earlier commits.
-- A missing `pytest` import was found during a later UI-test change and patched. **The latest commit must be rechecked in CI; do not assume the fix passed until the workflow reports success.**
+- A missing `pytest` import was found in the motion UI test and patched; subsequent work added manual coordinate marking, spatial-offset reports, and label-transition summaries.
+- **Current blocker:** recent Quality checks runs `40286403185` and `40284936782`, plus Windows package runs `40286399224` and `40284929795`, report failure. The connected GitHub interface did not return their step logs in this review, so root cause and final test/lint results are not yet confirmed. Earlier green runs do not validate these newer commits.
 
 ## 2. Not ready yet — release blockers
 
 These are required before we can honestly call the product ready as a usable *automated coach*. Prioritize in the order below.
 
 ### P0 — establish a reproducible, working baseline
+- [ ] Investigate the current failing runs before changing code: Quality checks `40286403185` (Python matrix) and Windows package `40286399224`; retrieve the failing step/log directly in GitHub Actions, then fix the root cause and rerun. Do not treat a green old run as proof for the current branch.
 - [ ] Check latest GitHub Actions run for all supported Python versions; fix every test, lint, packaging, and type-check failure.
 - [ ] Review the current branch diff and PR #14 for accidental changes, duplicate code, API inconsistencies, and broken UI paths.
 - [ ] Run the app from a clean environment using documented install steps; verify database migration from an existing v1 database.
@@ -122,7 +130,7 @@ Use one phase per chat to keep work manageable. Each phase should end with: code
 
 | Piece | Scope | Completion evidence |
 |---|---|---|
-| 1 | Baseline audit and CI repair | Latest CI green; clean install/smoke-test results documented |
+| 1 | Baseline audit and CI repair | Current failing workflow cause identified; latest CI green; clean install/smoke-test results documented |
 | 2 | Recording evaluation dataset and annotation protocol | Dataset schema, guide, split/leakage checks, documented data provenance |
 | 3 | Reticle/HUD detection prototype | Reproducible detector and measured held-out results |
 | 4 | Opponent detection prototype | Per-condition precision/recall and false-positive review |
@@ -138,6 +146,10 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 - Current branch: `feat/annotated-sequence-metrics`
 - Review PR: [#14](https://github.com/IliasK151/siegesense-ai/pull/14)
 - First task: **Piece 1 — baseline audit and CI repair**
-- First actions: fetch latest workflow runs; identify latest commit and run conclusion; inspect job logs for failures; fix the root cause; rerun CI; inspect project install/test configuration; update this file with verified outcomes.
+- Branch head checked during the last update: `8fe5285a5ccfad35f51856370165614103b392ff`.
+- Latest observed Quality checks run: [40286403185](https://github.com/IliasK151/siegesense-ai/actions/runs/40286403185) — failed; Python 3.10/3.11/3.12 jobs.
+- Latest observed Windows package run: [40286399224](https://github.com/IliasK151/siegesense-ai/actions/runs/40286399224) — failed before release readiness could be confirmed.
+- Detailed job logs were not available through the connected interface during the prior review. Open each failed run in GitHub Actions, expand the failed job, copy the first actual error and fix that cause rather than guessing.
+- After the CI issue is fixed, audit optional vision dependency installation, all UI/report paths, database migration, and the documented packaged-app smoke test. Update this roadmap only with verified outcomes.
 - Do not merge PRs unless the user explicitly asks.
 - Do not claim accuracy, detection, coaching validation, or release readiness without recorded evidence.
