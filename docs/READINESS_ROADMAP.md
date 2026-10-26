@@ -2,8 +2,8 @@
 
 **Status:** In development — not ready to claim precise, automated coaching yet  
 **Last updated:** 2026-10-26  
-**Working branch:** `feat/annotated-sequence-metrics`  
-**Related review:** [Draft PR #14](https://github.com/IliasK151/siegesense-ai/pull/14)  
+**Working branch:** `feat/usable-coach-workflow`  
+**Current draft review:** [PR #16](https://github.com/IliasK151/siegesense-ai/pull/16) (stacked on [PR #14](https://github.com/IliasK151/siegesense-ai/pull/14))  
 **Project goal:** A local-first Windows desktop coach that analyzes recorded Rainbow Six Siege gameplay and helps players understand aim, movement, decisions, and settings through evidence-backed feedback.
 
 This document is the handoff and source of truth for continuing work across multiple chats. Update the status and evidence as each piece is completed. “Implemented” means code exists; it does not mean the feature is validated on real gameplay.
