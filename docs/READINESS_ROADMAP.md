@@ -52,7 +52,7 @@ The items below describe work present on the current working branch as recorded 
 - README, annotation guide, analysis validation plan, and roadmap describe the current limitations.
 - CI has previously passed on Python 3.10, 3.11, and 3.12 for earlier commits.
 - A missing `pytest` import was found in the motion UI test and patched; subsequent work added manual coordinate marking, spatial-offset reports, and label-transition summaries.
-- **Current blocker:** recent Quality checks runs `40286403185` and `40284936782`, plus Windows package runs `40286399224` and `40284929795`, report failure. The connected GitHub interface did not return their step logs in this review, so root cause and final test/lint results are not yet confirmed. Earlier green runs do not validate these newer commits.
+- **Current blocker:** Quality checks run `40287116339` and Windows package run `40287111021` both report failure on the roadmap update commit. The visible Quality job metadata shows no execution steps and no assigned runner; logs are unavailable via the current connection. Confirm GitHub Actions runner/service status and retrieve the run details in the GitHub UI before changing app code. Treat tests, lint, packaging, and smoke-test status as unverified until an actual job executes and completes. Earlier green runs do not validate these newer commits.
 
 ## 2. Not ready yet — release blockers
 
@@ -147,9 +147,9 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 - Review PR: [#14](https://github.com/IliasK151/siegesense-ai/pull/14)
 - First task: **Piece 1 — baseline audit and CI repair**
 - Branch head checked during the last update: `8fe5285a5ccfad35f51856370165614103b392ff`.
-- Latest observed Quality checks run: [40286403185](https://github.com/IliasK151/siegesense-ai/actions/runs/40286403185) — failed; Python 3.10/3.11/3.12 jobs.
-- Latest observed Windows package run: [40286399224](https://github.com/IliasK151/siegesense-ai/actions/runs/40286399224) — failed before release readiness could be confirmed.
-- Detailed job logs were not available through the connected interface during the prior review. Open each failed run in GitHub Actions, expand the failed job, copy the first actual error and fix that cause rather than guessing.
+- Latest observed Quality checks run: [40287116339](https://github.com/IliasK151/siegesense-ai/actions/runs/40287116339) — failed; the Python 3.10/3.11/3.12 jobs show no execution steps and no runner assignment in available metadata.
+- Latest observed Windows package run: [40287111021](https://github.com/IliasK151/siegesense-ai/actions/runs/40287111021) — failed before release readiness could be confirmed.
+- First action: open the run pages in GitHub Actions and inspect the failure annotations/events. Because jobs show zero steps, check runner/provisioning/service errors before modifying Python code. If jobs begin execution, copy the first real test/lint/build error and fix that root cause.
 - After the CI issue is fixed, audit optional vision dependency installation, all UI/report paths, database migration, and the documented packaged-app smoke test. Update this roadmap only with verified outcomes.
 - Do not merge PRs unless the user explicitly asks.
 - Do not claim accuracy, detection, coaching validation, or release readiness without recorded evidence.
