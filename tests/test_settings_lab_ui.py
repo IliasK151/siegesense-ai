@@ -130,3 +130,58 @@ def test_settings_lab_records_dpi_and_mouse_sensitivity_multiplier(app: QApplica
     finally:
         window.close()
         database.close()
+
+
+
+def test_settings_lab_imports_only_mapped_game_settings_and_is_read_only(
+    app: QApplication, tmp_path, monkeypatch
+) -> None:
+    database = Database(":memory:")
+    window = MainWindow(settings_service=SettingsService(database))
+    path = tmp_path / "GameSettings.ini"
+    original = """[INPUT]
+MouseSensitivity=67
+MouseYawSensitivity=6
+MousePitchSensitivity=6
+MouseSensitivityMultiplierUnit=0.015000
+ADSMouseMultiplierUnit=0.020000
+ADSMouseSensitivityGlobal=52
+ADSMouseSensitivity1x=37
+ADSMouseSensitivity2x=44
+ADSMouseSensitivity3x=40
+"""
+    path.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(
+        "siegesense.ui.shell.QFileDialog.getOpenFileName",
+        lambda *_args, **_kwargs: (str(path), "Game settings (GameSettings.ini)"),
+    )
+    try:
+        window.settings_spinboxes["horizontal"].setValue(20)
+        window.settings_spinboxes["vertical"].setValue(21)
+        window.settings_spinboxes["ads_1x"].setValue(33)
+        window.settings_spinboxes["ads_2_5x"].setValue(44)
+        window._import_game_settings()
+
+        assert window.settings_spinboxes["horizontal"].value() == 6
+        assert window.settings_spinboxes["vertical"].value() == 6
+        assert window.settings_spinboxes["sensitivity_multiplier"].value() == pytest.approx(0.015)
+        assert window.settings_spinboxes["ads_sensitivity_multiplier"].value() == pytest.approx(0.02)
+        assert window.settings_spinboxes["ads_global"].value() == 52
+        assert window.settings_spinboxes["ads_1x"].value() == 37
+        # The file's 2x key must not be guessed to mean the UI's 2.5x field.
+        assert window.settings_spinboxes["ads_2_5x"].value() == 44
+        status = window.settings_import_status.text()
+        assert "Read GameSettings.ini without writing to it." in status
+        assert "adsmousesensitivity2x" in status.casefold()
+        assert "DPI is not stored" in status
+        assert path.read_text(encoding="utf-8") == original
+
+        window.settings_label_input.setText("Imported baseline")
+        window._save_settings_snapshot()
+        snapshot = window.settings_service.list_snapshots()[0]
+        assert snapshot.values["horizontal"] == 6
+        assert snapshot.values["ads_global"] == 52
+        assert snapshot.values["mouse_dpi"] == 800
+    finally:
+        window.close()
+        database.close()
