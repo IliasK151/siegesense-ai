@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
@@ -98,3 +99,47 @@ def summarize_spatial_error(dataset_path: str | Path) -> SpatialErrorSummary:
         observations=tuple(observations),
         limitations=limitations,
     )
+
+
+
+def write_spatial_report(
+    dataset_path: str | Path,
+    output_path: str | Path,
+) -> Path:
+    """Export manually marked reticle/target geometry as a transparent JSON report."""
+    source = Path(dataset_path).expanduser().resolve()
+    output = Path(output_path).expanduser().resolve()
+    if output == source:
+        raise ValueError("Spatial report output must not overwrite its annotation dataset")
+    summary = summarize_spatial_error(source)
+    report = {
+        "schema_version": 1,
+        "report_type": "manual_spatial_offset",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_dataset": str(source),
+        "summary": {
+            "annotated_point_count": summary.annotated_point_count,
+            "excluded_without_both_points": summary.excluded_without_both_points,
+            "median_horizontal_offset_pct": summary.median_horizontal_offset_pct,
+            "median_vertical_offset_pct": summary.median_vertical_offset_pct,
+            "median_distance_pct_frame_diagonal": summary.median_distance_pct_frame_diagonal,
+        },
+        "observations": [
+            {
+                "annotation_id": item.annotation_id,
+                "timestamp_ms": item.timestamp_ms,
+                "horizontal_offset_pct": item.horizontal_offset_pct,
+                "vertical_offset_pct": item.vertical_offset_pct,
+                "distance_pct_frame_diagonal": item.distance_pct_frame_diagonal,
+            }
+            for item in summary.observations
+        ],
+        "limitations": list(summary.limitations),
+        "automatic_detection_used": False,
+        "model_performance_evaluated": False,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    temporary.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    temporary.replace(output)
+    return output
