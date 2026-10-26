@@ -1348,7 +1348,10 @@ class MainWindow(QMainWindow):
         if transition is None:
             transition_text = "manual target-relative transition counts unavailable"
         elif transition.sampling_interval_ms is None:
-            transition_text = "manual target-relative transition counts unavailable without a known sample interval"
+            transition_text = (
+                "manual target-relative transition counts unavailable "
+                "without a known sample interval"
+            )
         else:
             transition_text = (
                 f"manual target-relative offset sign changes: horizontal "
