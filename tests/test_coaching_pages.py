@@ -30,6 +30,10 @@ def test_coach_summarises_manual_evidence_without_claiming_automatic_analysis(ap
         assert any("not proof of a weakness" in item for item in prompts)
         assert any("Overshot during target switch" in item and "overshoot, acog" in item for item in evidence)
         assert any("Rotated late" in item for item in evidence)
+        patterns = [window.coach_pattern_list.item(i).text() for i in range(window.coach_pattern_list.count())]
+        assert any("Possible overflick / overshoot" in item for item in patterns)
+        assert any("Single note" in item for item in patterns)
+        assert "not a demonstrated weakness" in window.coach_pattern_detail.text()
     finally:
         window.close()
         database.close()
