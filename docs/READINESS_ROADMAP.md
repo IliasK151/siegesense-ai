@@ -52,14 +52,14 @@ The items below describe work present on the current working branch as recorded 
 - README, annotation guide, analysis validation plan, and roadmap describe the current limitations.
 - CI has previously passed on Python 3.10, 3.11, and 3.12 for earlier commits.
 - A missing `pytest` import was found in the motion UI test and patched; subsequent work added manual coordinate marking, spatial-offset reports, and label-transition summaries.
-- **Current blocker:** Quality checks run `40287116339` and Windows package run `40287111021` both report failure on the roadmap update commit. The visible Quality job metadata shows no execution steps and no assigned runner; logs are unavailable via the current connection. Confirm GitHub Actions runner/service status and retrieve the run details in the GitHub UI before changing app code. Treat tests, lint, packaging, and smoke-test status as unverified until an actual job executes and completes. Earlier green runs do not validate these newer commits.
+- **Current blocker — pre-run runner failure confirmed:** Quality checks run `40287237377` (attempt 2) and Windows package run `40287232666` (attempt 2) still failed before any workflow step. Their jobs report `runner_id: 0`, an empty `runner_name`, `steps: []`, and no available log archive. A temporary no-op diagnostic workflow on the separate branch `diagnostics/actions-runner-provisioning-2026-10-26` also failed before steps on both `ubuntu-latest` and `windows-latest` in run [`40288108516`](https://github.com/IliasK151/siegesense-ai/actions/runs/40288108516) (jobs `121456486787` and `121456487241`). This does not reach checkout, Python, tests, lint, or application code, and is not confined to the Windows runner. GitHub's public status page showed Actions operational when checked on 2026-10-26; that does not rule out account- or repository-specific restrictions. The precise server-side cause is still unconfirmed. Check repository/account Actions permissions, usage/billing budgets, and account notifications; if those do not explain it, contact GitHub Support with the run/job IDs. Do not modify Python code based on these pre-run failures. Tests, lint, packaging, and smoke-test status remain unverified until actual steps execute.
 
 ## 2. Not ready yet — release blockers
 
 These are required before we can honestly call the product ready as a usable *automated coach*. Prioritize in the order below.
 
 ### P0 — establish a reproducible, working baseline
-- [ ] Investigate the current failing runs before changing code: Quality checks `40286403185` (Python matrix) and Windows package `40286399224`; retrieve the failing step/log directly in GitHub Actions, then fix the root cause and rerun. Do not treat a green old run as proof for the current branch.
+- [ ] Resolve the pre-run Actions failure first: inspect repository Settings → Actions → General and account usage/billing budgets and notifications. Both Ubuntu and Windows no-op probes failed before their first step, so this is upstream of app/test code. If permissions and budgets appear normal, open a GitHub Support case referencing run `40288108516`, jobs `121456486787` and `121456487241`, plus Quality run `40287237377` and Windows package run `40287232666`. Only proceed to app-level CI repair once steps execute or GitHub explains the runner failure.
 - [ ] Check latest GitHub Actions run for all supported Python versions; fix every test, lint, packaging, and type-check failure.
 - [ ] Review the current branch diff and PR #14 for accidental changes, duplicate code, API inconsistencies, and broken UI paths.
 - [ ] Run the app from a clean environment using documented install steps; verify database migration from an existing v1 database.
@@ -146,10 +146,10 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 - Current branch: `feat/annotated-sequence-metrics`
 - Review PR: [#14](https://github.com/IliasK151/siegesense-ai/pull/14)
 - First task: **Piece 1 — baseline audit and CI repair**
-- Branch head checked during the last update: `8fe5285a5ccfad35f51856370165614103b392ff`.
-- Latest observed Quality checks run: [40287116339](https://github.com/IliasK151/siegesense-ai/actions/runs/40287116339) — failed; the Python 3.10/3.11/3.12 jobs show no execution steps and no runner assignment in available metadata.
-- Latest observed Windows package run: [40287111021](https://github.com/IliasK151/siegesense-ai/actions/runs/40287111021) — failed before release readiness could be confirmed.
-- First action: open the run pages in GitHub Actions and inspect the failure annotations/events. Because jobs show zero steps, check runner/provisioning/service errors before modifying Python code. If jobs begin execution, copy the first real test/lint/build error and fix that root cause.
+- Feature-branch starting commit for the runner diagnostic: `e7f1ea2517613870a0be980d7b4ce4cd8cfa2c7c`. Read the live branch head before the next edit.
+- Baseline Quality checks run: [40287237377](https://github.com/IliasK151/siegesense-ai/actions/runs/40287237377), attempt 2 — all three Python matrix jobs failed before steps with `runner_id: 0`; no test result is available.
+- Baseline Windows package run: [40287232666](https://github.com/IliasK151/siegesense-ai/actions/runs/40287232666), attempt 2 — failed before steps with `runner_id: 0`; no packaging result is available.
+- First action: resolve the runner-level blocker using the diagnostic run linked above. Inspect Actions permissions and usage/budget settings, then contact GitHub Support if those are normal. The diagnostic branch is separate and has not been merged. Once jobs start executing, copy the first real test/lint/build failure and fix that root cause.
 - After the CI issue is fixed, audit optional vision dependency installation, all UI/report paths, database migration, and the documented packaged-app smoke test. Update this roadmap only with verified outcomes.
 - Do not merge PRs unless the user explicitly asks.
 - Do not claim accuracy, detection, coaching validation, or release readiness without recorded evidence.
