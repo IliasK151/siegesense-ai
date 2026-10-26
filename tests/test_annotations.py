@@ -153,3 +153,62 @@ def test_update_rejects_partial_coordinate_argument_sets(tmp_path: Path) -> None
             reticle_x=0.5,
             reticle_y=0.5,
         )
+
+
+def test_target_track_id_is_normalized_and_preserved_during_edits(tmp_path: Path) -> None:
+    manifest = make_manifest(tmp_path)
+    dataset_path = tmp_path / "annotations.json"
+    store = AnnotationStore(manifest, dataset_path)
+    original = store.add(
+        0,
+        "frame_000000000ms.png",
+        "crosshair_off_target",
+        annotator="reviewer",
+        target_track_id="  Target-A  ",
+    )
+
+    edited = store.update(
+        original.annotation_id,
+        label="crosshair_on_target",
+        annotator="reviewer",
+        note="label reviewed",
+    )
+    assert original.target_track_id == "target-a"
+    assert edited.target_track_id == "target-a"
+
+    cleared = store.update(
+        original.annotation_id,
+        label="crosshair_on_target",
+        annotator="reviewer",
+        note="clear grouping",
+        target_track_id="   ",
+    )
+    assert cleared.target_track_id is None
+
+
+def test_legacy_annotation_json_without_target_track_id_still_loads(tmp_path: Path) -> None:
+    manifest = make_manifest(tmp_path)
+    dataset_path = tmp_path / "legacy-annotations.json"
+    dataset_path.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "source_sha256": "abc123",
+            "manifest_path": str(manifest),
+            "annotations": [{
+                "annotation_id": "legacy-note",
+                "timestamp_ms": 0,
+                "frame_filename": "frame_000000000ms.png",
+                "label": "ambiguous",
+                "note": "old record",
+                "annotator": "reviewer",
+                "created_at": "2026-01-01T00:00:00+00:00",
+            }],
+        }),
+        encoding="utf-8",
+    )
+
+    dataset = load_dataset(dataset_path)
+
+    assert len(dataset.annotations) == 1
+    assert dataset.annotations[0].target_track_id is None
+

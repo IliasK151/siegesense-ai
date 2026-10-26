@@ -40,6 +40,10 @@ from siegesense.services.export_service import (
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.ui.point_picker import PointPickerLabel
+from siegesense.vision.aim_transition_analysis import (
+    summarize_aim_transitions,
+    write_aim_transition_report,
+)
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
@@ -799,10 +803,19 @@ class MainWindow(QMainWindow):
         }
         for value in sorted(ALLOWED_LABELS):
             self.annotation_label_combo.addItem(label_titles[value], value)
+        self.annotation_target_track_input = QLineEdit()
+        self.annotation_target_track_input.setPlaceholderText(
+            "Optional · same ID for the same target in this sequence"
+        )
+        self.annotation_target_track_input.setToolTip(
+            "Manual grouping only. Reuse this ID for the same visible target across "
+            "adjacent sampled frames; change it when the target or encounter changes."
+        )
         self.annotation_annotator_input = QLineEdit("Player")
         self.annotation_note_input = QLineEdit()
         self.annotation_note_input.setPlaceholderText("Optional context for this frame")
         annotation_form.addRow("Manual label", self.annotation_label_combo)
+        annotation_form.addRow("Target / sequence ID", self.annotation_target_track_input)
         annotation_form.addRow("Annotator", self.annotation_annotator_input)
         annotation_form.addRow("Note", self.annotation_note_input)
         detail_layout.addLayout(annotation_form)
@@ -832,6 +845,13 @@ class MainWindow(QMainWindow):
         )
         spatial_report_button.clicked.connect(self._export_spatial_report)
         history_layout.addWidget(spatial_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        transition_report_button = QPushButton("Export manual aim-transition report…")
+        transition_report_button.setToolTip(
+            "Count target-relative offset sign changes across manually tracked adjacent frames. "
+            "This does not diagnose overshoot or change settings."
+        )
+        transition_report_button.clicked.connect(self._export_aim_transition_report)
+        history_layout.addWidget(transition_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         motion_report_button = QPushButton("Analyze screen-space motion…")
         motion_report_button.setToolTip(
             "Estimate visible feature movement between adjacent sampled frames; this is not mouse input or an aim score."
@@ -1176,6 +1196,7 @@ class MainWindow(QMainWindow):
                 self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                target_track_id=self.annotation_target_track_input.text(),
                 **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
@@ -1215,6 +1236,35 @@ class MainWindow(QMainWindow):
         self.annotation_status.setText(
             f"Manual spatial-offset report exported to {written}. "
             "Only manually marked point pairs are included; this is not aim accuracy."
+        )
+
+    def _export_aim_transition_report(self) -> None:
+        """Export sign changes from manually marked points on identified targets."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_status.setText(
+                "Load and save a local annotation dataset before exporting aim transitions."
+            )
+            return
+        default_path = store.dataset_path.parent / "aim-transition-report.json"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export manual aim-transition report",
+            str(default_path),
+            "JSON report (*.json)",
+        )
+        if not output_path:
+            return
+        if not Path(output_path).suffix:
+            output_path = f"{output_path}.json"
+        try:
+            written = write_aim_transition_report(store.dataset_path, output_path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_status.setText(f"Aim-transition report export failed: {error}")
+            return
+        self.annotation_status.setText(
+            f"Manual aim-transition report exported to {written}. It counts target-relative "
+            "offset sign changes only; it does not diagnose overshoot or recommend sensitivity."
         )
 
     def _export_annotation_report(self) -> None:
@@ -1291,13 +1341,31 @@ class MainWindow(QMainWindow):
                 f"{spatial.median_vertical_offset_pct:+.2f}% frame height vertically, "
                 f"{spatial.median_distance_pct_frame_diagonal:.2f}% frame diagonal"
             )
+        try:
+            transition = summarize_aim_transitions(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            transition = None
+        if transition is None:
+            transition_text = "manual target-relative transition counts unavailable"
+        elif transition.sampling_interval_ms is None:
+            transition_text = (
+                "manual target-relative transition counts unavailable "
+                "without a known sample interval"
+            )
+        else:
+            transition_text = (
+                f"manual target-relative offset sign changes: horizontal "
+                f"{transition.horizontal_sign_change_count}, vertical "
+                f"{transition.vertical_sign_change_count}; eligible same-target pairs: "
+                f"{transition.eligible_adjacent_pair_count}"
+            )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
             f"off target: {summary.crosshair_off_target_frames} · "
             f"selected-frame on-target share: {share_text} · "
             f"transitions: {summary.target_transition_frames} · "
             f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
-            f"{sequence_text}. {spatial_text}. "
+            f"{sequence_text}. {spatial_text}. {transition_text}. "
             "Observed sampled spans are not precise event durations. Spatial offsets use manually "
             "marked points and are geometric measurements, not hit accuracy. Descriptive only; "
             "not aim accuracy or representative gameplay performance."
@@ -1309,9 +1377,10 @@ class MainWindow(QMainWindow):
             return
         for annotation in self._annotation_store.annotations:
             note = f" — {annotation.note}" if annotation.note else ""
+            track = f" · target {annotation.target_track_id}" if annotation.target_track_id else ""
             item = QListWidgetItem(
                 f"{annotation.timestamp_ms / 1000:.2f}s  ·  "
-                f"{annotation.label.replace('_', ' ')}{note}"
+                f"{annotation.label.replace('_', ' ')}{track}{note}"
             )
             item.setData(Qt.ItemDataRole.UserRole, annotation.annotation_id)
             self.annotation_history_list.addItem(item)
@@ -1327,6 +1396,7 @@ class MainWindow(QMainWindow):
         if annotation is None:
             return
         self.annotation_annotator_input.setText(annotation.annotator)
+        self.annotation_target_track_input.setText(annotation.target_track_id or "")
         self.annotation_note_input.setText(annotation.note)
         label_index = self.annotation_label_combo.findData(annotation.label)
         if label_index >= 0:
@@ -1436,6 +1506,7 @@ class MainWindow(QMainWindow):
                 label=self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                target_track_id=self.annotation_target_track_input.text(),
                 **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:

@@ -43,6 +43,14 @@ The first public release may be described as a **local gameplay-review and manua
 
 **Exit criteria:** a documented dataset protocol and baseline agreement results. No model accuracy claim before this phase.
 
+### Implemented bounded prototype — manual target-relative offset sign changes
+
+The manual aim-transition analysis adds a human-assigned target/sequence ID to each frame annotation and a report that counts horizontal/vertical sign changes in target-minus-reticle offsets. The calculation uses normalized manual points, reports horizontal offsets as a percentage of frame width and vertical offsets as a percentage of frame height, and compares only points for the same manually named target whose timestamps are exactly one known sampling interval apart. Missing coordinates, unknown intervals, and timestamp gaps are excluded or break the sequence.
+
+**This is not an overshoot detector.** A sign change only means that the manually marked target-relative offset changed sides between sampled frames. It cannot tell which object moved, establish mouse input or hit outcome, identify a sensitivity problem, or automatically recommend settings. No automatic reticle/opponent detector or model-performance evaluation is added in this slice.
+
+Tests were added for same-target sign changes, target grouping, missing points, timestamp gaps, malformed interval handling, report overwrite protection, legacy annotation compatibility, and the UI export path. These must be executed on the current branch and a clean supported Windows environment before this slice is treated as verified.
+
 ## Phase 4 — visual detectors and temporal aim analysis
 
 - Establish simple baseline methods and a reproducible held-out evaluation before adding a model.
