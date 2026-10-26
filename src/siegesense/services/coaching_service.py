@@ -7,8 +7,8 @@ detector. It never infers a problem from free-text notes alone.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from siegesense.domain.models import Observation, Session
 
