@@ -234,6 +234,7 @@ def test_dropping_video_automatically_samples_and_opens_review(
         return SimpleNamespace(
             frames=(SimpleNamespace(timestamp_ms=0, filename=frame_name),),
             interval_ms=interval_ms,
+            duration_ms=1000,
         )
 
     monkeypatch.setattr("siegesense.ui.shell.sample_video_frames", fake_sample_video_frames)
