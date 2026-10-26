@@ -22,10 +22,13 @@ Use a short match recording you are allowed to review. Choose a clip where the r
 
 ## 4. Start a review with drag and drop
 
-1. On the **Overview** screen, drag your video onto the large drop area, or click **Choose a video**. You can also open **Clip Annotation** and use the same drop area there.
-2. SiegeSense automatically creates a new review folder beside the recording, samples frames locally at the default **500 ms** interval (about 2 frames per second), loads the generated manifest, and opens **Clip Annotation** on the first frame.
-3. Sampling happens in the background so the window stays responsive. Very long recordings can still take some time and disk space. The original video is never changed or uploaded.
-4. Use **Advanced options** only when you need to change the sampling interval, choose another output folder, or open an existing \`sampling_manifest.json\`. The default interval is intended for browsing and manual review, not precise event timing.
+1. On **Overview**, drag your gameplay video onto the large drop area, or click **Choose a video**. You can also use the same drop area on **Clip Annotation**.
+2. SiegeSense samples frames in the background at the default **500 ms** interval (about 2 frames per second). It creates a new folder beside the source recording named like \`gameplay_siegesense_review\`; if that folder already exists, it uses a numbered alternative rather than overwriting it.
+3. When sampling finishes, the app creates or reuses a local review session, loads the video into **Session Review**, and opens the video player. Press **Play** when you're ready to watch the recording.
+4. Choose **Open sampled-frame review** on the playback panel to move into **Clip Annotation**, where the first sampled frame is already selected. Your frame labels and notes remain local and are still entered manually.
+5. Use **Advanced options** on the drop panel only if you need to change the interval, choose a different output folder, or load an existing \`sampling_manifest.json\`.
+
+The default interval is intended for lightweight browsing and manual review, not precise event timing. Very long videos can take longer to sample and use more disk space, although the app stays responsive while sampling. The source video is never modified or uploaded.
 ## 5. Mark a small sequence
 
 1. Select a readable frame and assign the best label for what is actually visible. Use **ambiguous** or **unusable** instead of guessing.
