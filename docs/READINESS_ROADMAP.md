@@ -174,3 +174,15 @@ Verification caveat:
 - These edits are committed to the feature branch but have not yet been run on the user's Windows PC.
 - Hosted GitHub Actions previously failed before runner allocation; a live green test/lint result has not been established for this slice.
 - This does not complete the overall product. Automatic reticle/opponent detection, robust temporal event analysis, validated settings recommendations, and real-media Windows validation remain release blockers.
+
+
+## Manual temporal offset evidence — integration into usability branch
+
+The manually tracked target-relative offset analysis from draft PR #15 is included in this branch's Clip Annotation path:
+- annotations can store an optional normalized manual target/sequence ID without breaking older schema-v1 datasets;
+- same-target point offsets are compared only for annotated samples exactly one known sampling interval apart;
+- UI summary displays horizontal/vertical offset sign-change counts and eligible same-target pair counts;
+- a local JSON report records exclusions and explicitly states that automatic detection, overshoot diagnosis, and aim-accuracy evaluation were not performed;
+- report export protects the source video, manifest, annotation dataset, and sampled frame files from overwrite.
+
+This is additional review evidence, not automatic aim detection. Verification is still blocked by hosted runners being unavailable before any CI steps begin, and it remains unverified on the user's Windows PC.
