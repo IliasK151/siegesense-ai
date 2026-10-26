@@ -13,7 +13,7 @@ The intended end state is to help a player understand patterns such as:
 - Reticle-to-opponent alignment and target acquisition in recorded footage.
 - Possible overflicks, underflicks, corrections, target switches, and settling behaviour when the video contains enough clear, correctly timed evidence.
 - Movement and peeking patterns visible in the recording, alongside user notes about decisions and positioning.
-- Repeatable player-specific settings experiments, including sensitivity and ADS values, with clear rationale, trade-offs, confidence, and a way to compare results.
+- Repeatable player-specific settings experiments, including sensitivity, ADS values, mouse DPI, and the active sensitivity multiplier, with clear rationale, trade-offs, confidence, and a way to compare results.
 - Session-to-session trends that account for recording quality, sample sizes, game settings, scope, and uncertainty.
 
 Implementation order is deliberate: first make local recording review dependable; then develop isolated reticle/opponent and event-analysis prototypes; measure them on player-owned recordings with independently reviewed reference labels; and only then use validated results to drive coaching. When a recording cannot support a conclusion, the coach must say that evidence is insufficient rather than fabricate a result.
