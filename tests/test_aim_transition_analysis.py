@@ -117,13 +117,17 @@ def test_missing_track_or_points_are_reported_as_excluded(tmp_path: Path) -> Non
     assert summary.horizontal_sign_change_count == 0
 
 
-def test_interval_must_be_positive_when_supplied(tmp_path: Path) -> None:
+@pytest.mark.parametrize("interval", [0, -1, True, 1.5])
+def test_interval_must_be_positive_when_supplied(
+    tmp_path: Path, interval: int | float | bool
+) -> None:
+    # Deliberately do not create annotations.json: argument validation should happen
+    # before any dataset I/O, so a bad interval must not surface FileNotFoundError.
     make_manifest(tmp_path)
-    store = AnnotationStore(tmp_path / "sampling_manifest.json", tmp_path / "annotations.json")
     with pytest.raises(ValueError, match="positive integer"):
         summarize_aim_transitions(
             tmp_path / "annotations.json",
-            sampling_interval_ms=0,
+            sampling_interval_ms=interval,
         )
 
 
