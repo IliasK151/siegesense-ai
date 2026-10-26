@@ -60,9 +60,9 @@ The items below describe work present on the current working branch as recorded 
 These are required before we can honestly call the product ready as a usable *automated coach*. Prioritize in the order below.
 
 ### P0 — establish a reproducible, working baseline
-- [x] Add local Windows setup, launch, test/lint, and packaging scripts plus instructions for trying a personal Siege recording. Code is committed; Windows execution remains unverified.
-- [ ] Run setup, tests, lint, and packaging on a supported Windows machine; fix any real script, dependency, test, or lint failures found.
-- [ ] Resolve the pre-run Actions failure: inspect repository Settings → Actions → General and account Actions usage/budget and billing notifications. Both Ubuntu and Windows no-op probes failed before their first step, so this is upstream of app/test code. If settings look normal, contact GitHub Support referencing diagnostic run `40288108516`, jobs `121456486787` and `121456487241`, plus Quality run `40289455674` and Windows package run `40289448635`. Only proceed to app-level CI repair once steps execute or GitHub explains the runner failure.
+- [x] Add Windows one-click setup/launch and check/package scripts plus a personal-recording test guide. These are code/documentation additions only; execution on Windows remains unverified.
+- [ ] Download the feature-branch source ZIP on Windows, double-click `START_SIEGESENSE.bat` to install and launch, then run `CHECK_SIEGESENSE.bat`. Fix any concrete script, dependency, test, or lint errors surfaced locally.
+- [ ] Resolve the pre-run Actions failure: inspect repository Settings → Actions → General and account Actions usage/budget and billing notifications. Both Ubuntu and Windows no-op probes failed before their first step. If settings look normal, contact GitHub Support referencing diagnostic run `40288108516`, jobs `121456486787` and `121456487241`, plus current Quality run `40290166162` and Windows package run `40290161924`.
 - [ ] Check latest GitHub Actions run for all supported Python versions; fix every test, lint, packaging, and type-check failure.
 - [ ] Review the current branch diff and PR #14 for accidental changes, duplicate code, API inconsistencies, and broken UI paths.
 - [ ] Run the app from a clean environment using documented install steps; verify database migration from an existing v1 database.
