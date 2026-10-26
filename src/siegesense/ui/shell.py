@@ -45,7 +45,7 @@ from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_
 from siegesense.vision.frame_sampling import sample_video_frames
 from siegesense.vision.motion_analysis import analyze_manifest_motion, write_motion_report
 from siegesense.vision.sequence_analysis import summarize_annotated_sequences
-from siegesense.vision.spatial_analysis import summarize_spatial_error
+from siegesense.vision.spatial_analysis import summarize_spatial_error, write_spatial_report
 
 NAV_ITEMS = [
     ("Overview", "⌂", "Your performance workspace"),
@@ -826,6 +826,12 @@ class MainWindow(QMainWindow):
         export_report_button = QPushButton("Export local evaluation report…")
         export_report_button.clicked.connect(self._export_annotation_report)
         history_layout.addWidget(export_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        spatial_report_button = QPushButton("Export manual spatial-offset report…")
+        spatial_report_button.setToolTip(
+            "Export offsets calculated only from manually marked reticle and target points."
+        )
+        spatial_report_button.clicked.connect(self._export_spatial_report)
+        history_layout.addWidget(spatial_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         motion_report_button = QPushButton("Analyze screen-space motion…")
         motion_report_button.setToolTip(
             "Estimate visible feature movement between adjacent sampled frames; this is not mouse input or an aim score."
@@ -1180,6 +1186,35 @@ class MainWindow(QMainWindow):
         self._refresh_annotation_summary()
         self.annotation_status.setText(
             f"Saved {annotation.label.replace('_', ' ')} at {annotation.timestamp_ms} ms."
+        )
+
+    def _export_spatial_report(self) -> None:
+        """Export the current dataset's manually marked reticle/target offsets."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_status.setText(
+                "Load and save a local annotation dataset before exporting spatial offsets."
+            )
+            return
+        default_path = store.dataset_path.parent / "spatial-offset-report.json"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export manual spatial-offset report",
+            str(default_path),
+            "JSON report (*.json)",
+        )
+        if not output_path:
+            return
+        if not Path(output_path).suffix:
+            output_path = f"{output_path}.json"
+        try:
+            written = write_spatial_report(store.dataset_path, output_path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_status.setText(f"Spatial report export failed: {error}")
+            return
+        self.annotation_status.setText(
+            f"Manual spatial-offset report exported to {written}. "
+            "Only manually marked point pairs are included; this is not aim accuracy."
         )
 
     def _export_annotation_report(self) -> None:
