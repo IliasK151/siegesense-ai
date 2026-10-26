@@ -12,6 +12,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -1922,7 +1923,7 @@ class MainWindow(QMainWindow):
         form = QFormLayout()
         self.settings_label_input = QLineEdit("Baseline")
         form.addRow("Snapshot name", self.settings_label_input)
-        self.settings_spinboxes: dict[str, QSpinBox] = {}
+        self.settings_spinboxes: dict[str, QSpinBox | QDoubleSpinBox] = {}
         for key, label, minimum, maximum, value in (
             ("horizontal", "Horizontal sensitivity", 1, 100, 6),
             ("vertical", "Vertical sensitivity", 1, 100, 6),
@@ -1936,6 +1937,27 @@ class MainWindow(QMainWindow):
             control.setValue(value)
             self.settings_spinboxes[key] = control
             form.addRow(label, control)
+
+        dpi_control = QSpinBox()
+        dpi_control.setRange(100, 25600)
+        dpi_control.setSingleStep(100)
+        dpi_control.setValue(800)
+        dpi_control.setToolTip(
+            "Record the DPI profile actually active in your mouse software. SiegeSense does not change it."
+        )
+        self.settings_spinboxes["mouse_dpi"] = dpi_control
+        form.addRow("Mouse DPI", dpi_control)
+
+        multiplier_control = QDoubleSpinBox()
+        multiplier_control.setDecimals(6)
+        multiplier_control.setRange(0.000001, 1.0)
+        multiplier_control.setSingleStep(0.001)
+        multiplier_control.setValue(0.020000)
+        multiplier_control.setToolTip(
+            "Enter the MouseSensitivityMultiplierUnit value from your active Siege configuration."
+        )
+        self.settings_spinboxes["sensitivity_multiplier"] = multiplier_control
+        form.addRow("Mouse sensitivity multiplier", multiplier_control)
         layout.addLayout(form)
         save_button = QPushButton("Save settings snapshot")
         save_button.clicked.connect(self._save_settings_snapshot)
