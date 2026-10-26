@@ -14,6 +14,7 @@ from pathlib import Path
 
 ANNOTATION_SCHEMA_VERSION = 1
 _UNSET_COORDINATE = object()
+_UNSET_TRACK_ID = object()
 ALLOWED_LABELS = frozenset({
     "target_transition",
     "crosshair_on_target",
@@ -40,6 +41,8 @@ class FrameAnnotation:
     reticle_y: float | None = None
     target_x: float | None = None
     target_y: float | None = None
+    # Human-assigned identity for the same visible target across nearby sampled frames.
+    target_track_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +104,12 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
             raise ValueError("Annotation frame filename must be a local basename")
         if not isinstance(annotation.note, str):
             raise ValueError("Annotation note must be text")
+        if annotation.target_track_id is not None and (
+            not isinstance(annotation.target_track_id, str)
+            or not annotation.target_track_id.strip()
+            or len(annotation.target_track_id) > 80
+        ):
+            raise ValueError("Target track ID must be text of at most 80 characters, or null")
         if not isinstance(annotation.created_at, str) or not annotation.created_at.strip():
             raise ValueError("Annotation creation timestamp cannot be empty")
         if isinstance(annotation.timestamp_ms, bool) or not isinstance(annotation.timestamp_ms, int):
@@ -114,6 +123,20 @@ def load_dataset(dataset_path: str | Path) -> AnnotationDataset:
         manifest_path=manifest_path,
         annotations=annotations,
     )
+
+
+def _normalize_target_track_id(value: object) -> str | None:
+    """Normalize an optional human-assigned target identifier."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Target track ID must be text")
+    normalized = value.strip().casefold()
+    if not normalized:
+        return None
+    if len(normalized) > 80:
+        raise ValueError("Target track ID must be at most 80 characters")
+    return normalized
 
 
 def _validate_point(x: float | None, y: float | None, name: str) -> None:
@@ -175,12 +198,14 @@ class AnnotationStore:
         *,
         annotator: str,
         note: str = "",
+        target_track_id: str | None = None,
         reticle_x: float | None = None,
         reticle_y: float | None = None,
         target_x: float | None = None,
         target_y: float | None = None,
     ) -> FrameAnnotation:
         _validate_annotation_fields(timestamp_ms, label, annotator)
+        target_track_id = _normalize_target_track_id(target_track_id)
         _validate_point(reticle_x, reticle_y, "reticle")
         _validate_point(target_x, target_y, "target")
         self._validate_frame(timestamp_ms, frame_filename)
@@ -196,6 +221,7 @@ class AnnotationStore:
             reticle_y=reticle_y,
             target_x=target_x,
             target_y=target_y,
+            target_track_id=target_track_id,
         )
         self._annotations[annotation.annotation_id] = annotation
         self.save()
@@ -208,6 +234,7 @@ class AnnotationStore:
         label: str,
         annotator: str,
         note: str = "",
+        target_track_id: str | None | object = _UNSET_TRACK_ID,
         reticle_x: float | None | object = _UNSET_COORDINATE,
         reticle_y: float | None | object = _UNSET_COORDINATE,
         target_x: float | None | object = _UNSET_COORDINATE,
@@ -234,6 +261,10 @@ class AnnotationStore:
         else:
             reticle_x, reticle_y = existing.reticle_x, existing.reticle_y
             target_x, target_y = existing.target_x, existing.target_y
+        if target_track_id is _UNSET_TRACK_ID:
+            target_track_id = existing.target_track_id
+        else:
+            target_track_id = _normalize_target_track_id(target_track_id)
         updated = replace(
             existing,
             label=label,
@@ -243,6 +274,7 @@ class AnnotationStore:
             reticle_y=reticle_y,
             target_x=target_x,
             target_y=target_y,
+            target_track_id=target_track_id,
         )
         self._annotations[annotation_id] = updated
         self.save()

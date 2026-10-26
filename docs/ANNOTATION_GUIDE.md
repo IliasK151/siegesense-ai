@@ -53,3 +53,12 @@ The spatial report calculates target-minus-reticle horizontal offset as a percen
 
 
 When the sampling interval is known, the sequence summary may count adjacent off-target→on-target and on-target→off-target label transitions. Counts include only consecutive annotated samples exactly one interval apart; they do not establish why the reticle changed relative to a target and are not a validated aim-correction metric.
+
+
+## Manual target IDs and temporal offset changes
+
+For the optional target-relative transition report, enter a short **Target / sequence ID** for every annotated frame that belongs to the same visible opponent across one continuous encounter. Reuse the ID only when you can confidently identify the same target in the adjacent sampled frame. Use a different ID for a different target or encounter, and leave it blank when identity is uncertain. IDs are manual reviewer metadata, not automatic tracking.
+
+The report compares a frame only with the next annotated point for the same ID when both reticle and target points are present and their timestamps differ by exactly the manifest's known sampling interval. Horizontal offset is target X minus reticle X as a percentage of frame width; vertical offset is target Y minus reticle Y as a percentage of frame height. A sign change means the target-relative offset went from one side of zero to the other between sampled frames.
+
+**A sign change is not proof of overshoot.** The marked opponent or camera may have moved, and sampled frames can miss what happened between them. This report does not measure mouse input, identify the cause of motion, establish hit/miss outcomes, or recommend sensitivity values. Treat the output as a review cue checked against the original video, not an automatic coaching verdict.

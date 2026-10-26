@@ -4,7 +4,7 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. The app now has an initial, limited screen-space motion estimator for sampled frames using sparse optical flow. It reports visible feature displacement and a descriptive coherent-feature ratio; it does not detect opponents, measure mouse input, or score aim. The Clip Annotation workspace can sample local recordings, label frames, manually mark reticle/target points, display descriptive summaries, and export local evaluation, spatial-offset, and motion reports, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
+> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. The app now has an initial, limited screen-space motion estimator for sampled frames using sparse optical flow. It reports visible feature displacement and a descriptive coherent-feature ratio; it does not detect opponents, measure mouse input, or score aim. The Clip Annotation workspace can sample local recordings, label frames, manually mark reticle/target points, assign a manual target ID across adjacent samples, and export local evaluation, spatial-offset, target-relative temporal-transition, and motion reports. Temporal sign changes require a known sampling interval and are not automatic overflick detections. The AI Coach groups explicit review tags into practice prompts, cites source notes, and distinguishes single-session notes from patterns recurring across sessions. Repeated sensitivity-related tags can prepare a controlled settings-experiment draft without prescribing or applying values. This remains deterministic, rules-based manual coaching, not a trained AI model or automatic reticle/opponent detector.
 
 ## Product principles
 
@@ -25,7 +25,7 @@ SiegeSense AI is intended to help players understand their aim, movement, settin
 6. AI Coach
 7. Preferences & Privacy
 
-Overview, Session Review, and Settings Lab have initial functional workflows. Aim Lab, Movement, AI Coach, and Preferences & Privacy remain scaffolded. The recorded-video player still needs verification against representative real clips. Recorded-footage analysis and measurable coaching capabilities will be delivered as separate, testable increments.
+Overview now starts with a prominent drag-and-drop video area. Drop a supported local recording and SiegeSense samples it in the background, creates or reuses a local review session, opens the full-video player in Session Review, and offers one button to open the sampled-frame review. The default sampling interval is 500 ms to keep review folders lighter; advanced options remain available for changing the interval or loading an existing manifest. Aim Lab and Movement show manually tagged observations; AI Coach groups supported manual tags into evidence-linked prompts; recurring aim tags can start an editable one-variable experiment in Settings Lab. Settings Lab can read recognized values from a user-selected GameSettings.ini without editing it, and stores horizontal/vertical sensitivity, ADS values, mouse DPI, and hip-fire/ADS multipliers in local snapshots. Unmapped scope values remain for manual confirmation. Preferences & Privacy displays the local database path, opens its folder, and exports a SQLite backup. Frame labels remain manual; no video is uploaded.
 
 ## Technology
 
@@ -42,7 +42,7 @@ See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md),
 
 A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow). If hosted runners are unavailable, the same intended local path is provided in `scripts/package_windows.ps1`; it installs the dependencies, runs tests and lint, builds with PyInstaller, and smoke-tests the packaged executable before creating `dist/SiegeSenseAI-Windows-x64.zip`. The local script has been added but still needs to be executed on a supported Windows machine. Neither a successful startup smoke test nor a package build verifies video codecs or coaching accuracy.
 
-For the fastest path to trying your own recording, follow the [Windows clip-testing guide](docs/TEST_YOUR_OWN_SIEGE_CLIP.md). It explains how to set up, launch, check, and package the preview. The artifact remains an early local recording-review and manual-annotation prototype, not a validated automatic aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
+For the fastest path to trying your own recording, follow the [Windows clip-testing guide](docs/TEST_YOUR_OWN_SIEGE_CLIP.md). Read [coaching tags and evidence limits](docs/COACHING_TAGS_AND_LIMITS.md) for supported tags and how prompts are kept cautious. The clip guide explains how to set up, launch, check, package, label target sequences, and connect recurring observations to settings experiments. The artifact remains an early local recording-review and manual-annotation prototype, not a validated automatic aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
 
 ## Development setup
 
@@ -97,3 +97,13 @@ No license has been selected yet. Until one is added, all rights are reserved by
 
 
 The manual sequence summary also counts adjacent off-target→on-target and on-target→off-target label transitions when the sampling interval is known. These are counts of consecutive reviewed labels only; gaps, missing labels, and unknown intervals are not inferred, and the counts are not validated aim-correction metrics.
+
+
+## Manual temporal aim review
+
+Clip Annotation can also count target-relative offset sign changes when you manually mark reticle and target points and assign a consistent target/sequence ID across adjacent sampled frames. The sampling interval must be known and adjacent samples must be exactly one interval apart. Read the [annotation guide](docs/ANNOTATION_GUIDE.md) for the workflow and evidence limitations. These counts are manual review cues, not automatic overshoot detection or aim-accuracy scores.
+
+
+### Read-only GameSettings.ini import
+
+Settings Lab includes **Import GameSettings.ini…** for a file you select. It reads recognized values from `[INPUT]`, leaves unsupported scope mappings untouched, and does not write to the source file. Verify the imported fields and manually confirm DPI and current per-scope sensitivity values before saving a baseline.

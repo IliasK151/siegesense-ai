@@ -1,17 +1,18 @@
 """Integration tests for the graphical local clip annotation workflow."""
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from siegesense.services.session_service import SessionService
 from siegesense.storage.database import Database
-from siegesense.ui.shell import MainWindow
+from siegesense.ui.shell import MainWindow, VideoDropZone
 
 
 @pytest.fixture
@@ -151,6 +152,125 @@ def test_annotation_workspace_samples_local_recording(
         assert window.annotation_manifest_input.text() == str(output / "sampling_manifest.json")
     finally:
         window.close()
+
+
+def test_video_drop_zone_accepts_video_and_rejects_non_video(app: QApplication, tmp_path: Path) -> None:
+    video = tmp_path / "match.mp4"
+    video.write_bytes(b"video")
+    zone = VideoDropZone()
+    dropped: list[str] = []
+    zone.video_dropped.connect(dropped.append)
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(video))])
+    drag = QDragEnterEvent(
+        QPoint(2, 2),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    zone.dragEnterEvent(drag)
+    assert drag.isAccepted()
+
+    drop = QDropEvent(
+        QPointF(2, 2),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    zone.dropEvent(drop)
+    assert drop.isAccepted()
+    assert dropped == [str(video)]
+
+    invalid_mime = QMimeData()
+    invalid_mime.setUrls([QUrl.fromLocalFile(str(tmp_path / "notes.txt"))])
+    invalid_drop = QDropEvent(
+        QPointF(2, 2),
+        Qt.DropAction.CopyAction,
+        invalid_mime,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    zone.dropEvent(invalid_drop)
+    assert not invalid_drop.isAccepted()
+    assert dropped == [str(video)]
+
+
+def test_dropping_video_automatically_samples_and_opens_review(
+    app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "gameplay.mp4"
+    source.write_bytes(b"fake recording")
+    template = tmp_path / "template.png"
+    pixmap = QPixmap(320, 180)
+    pixmap.fill(Qt.GlobalColor.darkMagenta)
+    assert pixmap.save(str(template))
+    frame_bytes = template.read_bytes()
+
+    def fake_sample_video_frames(source_path, output_dir, *, interval_ms):
+        destination = Path(output_dir)
+        destination.mkdir(parents=True)
+        frame_name = "frame_000000000ms.png"
+        (destination / frame_name).write_bytes(frame_bytes)
+        (destination / "sampling_manifest.json").write_text(json.dumps({
+            "schema_version": 1,
+            "source_path": str(source_path),
+            "source_sha256": "auto-review-fingerprint",
+            "source_fps": 30.0,
+            "source_width": 320,
+            "source_height": 180,
+            "duration_ms": 1000,
+            "start_ms": 0,
+            "end_ms": 1000,
+            "interval_ms": interval_ms,
+            "frames": [{
+                "timestamp_ms": 0,
+                "frame_index": 0,
+                "filename": frame_name,
+            }],
+        }), encoding="utf-8")
+        return SimpleNamespace(
+            frames=(SimpleNamespace(timestamp_ms=0, filename=frame_name),),
+            interval_ms=interval_ms,
+            duration_ms=1000,
+        )
+
+    monkeypatch.setattr("siegesense.ui.shell.sample_video_frames", fake_sample_video_frames)
+    database = Database(":memory:")
+    service = SessionService(database)
+    window = MainWindow(session_service=service)
+    try:
+        window._start_video_review(str(source))
+        assert not window.annotation_sampling_progress.isHidden()
+        deadline = time.monotonic() + 8
+        while window._sampling_worker is not None and time.monotonic() < deadline:
+            app.processEvents()
+            QTest.qWait(10)
+        app.processEvents()
+
+        assert window._sampling_worker is None
+        assert window.annotation_frame_list.count() == 1
+        assert window.annotation_frame_list.currentRow() == 0
+        assert "Review ready" in window.annotation_status.text()
+        assert "Session Review" in window.breadcrumb.text()
+        assert window.annotation_manifest_input.text().endswith("sampling_manifest.json")
+        assert Path(window.annotation_output_input.text()).is_dir()
+        assert window.annotation_sampling_progress.isHidden()
+
+        sessions = service.list_sessions()
+        assert len(sessions) == 1
+        assert Path(sessions[0].media_path).resolve() == source.resolve()
+        assert window.review_session_combo.currentData() == sessions[0].id
+        assert window.review_sampled_frames_button.isEnabled()
+        assert Path(window.review_media_player.source().toLocalFile()).resolve() == source.resolve()
+
+        window._open_sampled_frame_review()
+        assert "Clip Annotation" in window.breadcrumb.text()
+    finally:
+        window.close()
+        database.close()
 
 
 def test_saved_annotation_can_be_linked_to_real_session(app: QApplication, tmp_path: Path) -> None:

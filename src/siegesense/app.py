@@ -61,6 +61,7 @@ def _run_application(smoke_test: bool) -> int:
         window = MainWindow(
             session_service=session_service,
             settings_service=SettingsService(database),
+            database_path=database.path,
         )
         if smoke_test:
             expected_pages = {

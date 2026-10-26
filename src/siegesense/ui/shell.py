@@ -6,12 +6,13 @@ import sqlite3
 from pathlib import Path
 from statistics import median
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -22,7 +23,9 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -32,14 +35,20 @@ from PySide6.QtWidgets import (
 )
 
 from siegesense.domain.models import ObservationKind
+from siegesense.services.coaching_service import COACHING_TAG_GUIDE, build_coaching_insights
 from siegesense.services.export_service import (
     render_session_csv,
     render_session_json,
     render_session_summary,
 )
+from siegesense.services.game_settings_import_service import read_game_settings_ini
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.ui.point_picker import PointPickerLabel
+from siegesense.vision.aim_transition_analysis import (
+    summarize_aim_transitions,
+    write_aim_transition_report,
+)
 from siegesense.vision.annotations import ALLOWED_LABELS, AnnotationStore, load_manifest
 from siegesense.vision.evaluation import summarize_aim_frames, write_evaluation_report
 from siegesense.vision.frame_sampling import sample_video_frames
@@ -57,6 +66,100 @@ NAV_ITEMS = [
     ("AI Coach", "✳", "Evidence-linked coaching, when available"),
     ("Preferences & Privacy", "☷", "Capture, data, and application preferences"),
 ]
+
+
+SUPPORTED_VIDEO_SUFFIXES = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"})
+
+
+class VideoDropZone(QFrame):
+    """Large, simple drop target for starting a local recording review."""
+
+    video_dropped = Signal(str)
+    browse_requested = Signal()
+
+    def __init__(self, prompt: str = "Drop a gameplay video here", parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("VideoDropZone")
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(148)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(8)
+        title = QLabel(prompt)
+        title.setObjectName("PanelTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle = QLabel("MP4, MKV, MOV, AVI or WEBM · video stays on this PC")
+        subtitle.setObjectName("Muted")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
+        button = QPushButton("Choose a video")
+        button.setObjectName("PrimaryButton")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(self.browse_requested.emit)
+        layout.addStretch(1)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch(1)
+
+    @staticmethod
+    def _first_local_video(event) -> str | None:
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            return None
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            candidate = Path(url.toLocalFile())
+            if candidate.suffix.lower() in SUPPORTED_VIDEO_SUFFIXES:
+                return str(candidate)
+        return None
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        if self._first_local_video(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        if self._first_local_video(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        path = self._first_local_video(event)
+        if path:
+            self.video_dropped.emit(path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+
+class VideoSamplingWorker(QThread):
+    """Sample a dropped recording in the background so the UI remains responsive."""
+
+    succeeded = Signal(object, str)
+    failed = Signal(str)
+
+    def __init__(self, source: str, output_dir: str, interval_ms: int) -> None:
+        super().__init__()
+        self.source = source
+        self.output_dir = output_dir
+        self.interval_ms = interval_ms
+
+    def run(self) -> None:
+        try:
+            report = sample_video_frames(
+                self.source,
+                self.output_dir,
+                interval_ms=self.interval_ms,
+            )
+        except Exception as error:
+            self.failed.emit(str(error))
+            return
+        self.succeeded.emit(report, self.output_dir)
 
 
 def _median_coherent_ratio(pairs: tuple) -> float:
@@ -113,15 +216,18 @@ class MainWindow(QMainWindow):
         self,
         session_service: SessionService | None = None,
         settings_service: SettingsService | None = None,
+        database_path: str | Path | None = None,
     ) -> None:
         super().__init__()
         self.session_service = session_service
         self.settings_service = settings_service
+        self.database_path = Path(database_path) if database_path is not None else None
         self.setWindowTitle("SiegeSense AI")
         self.resize(1320, 850)
         self.setMinimumSize(960, 640)
         self._collapsed = False
         self._nav_buttons: dict[str, QPushButton] = {}
+        self._sampling_worker: VideoSamplingWorker | None = None
 
         root = QWidget()
         root_layout = QHBoxLayout(root)
@@ -234,9 +340,31 @@ class MainWindow(QMainWindow):
             self._build_annotation_lab(page_layout)
         elif name == "AI Coach":
             self._build_ai_coach(page_layout)
+        elif name == "Preferences & Privacy":
+            self._build_preferences(page_layout)
         elif name in {"Aim Lab", "Movement"}:
             self._build_category_review(page_layout, name)
         elif name == "Overview":
+            overview_review_panel = QFrame()
+            overview_review_panel.setObjectName("Panel")
+            overview_review_layout = QVBoxLayout(overview_review_panel)
+            overview_review_layout.setContentsMargins(18, 16, 18, 18)
+            overview_review_layout.setSpacing(10)
+            overview_review_title = QLabel("Start a recording review")
+            overview_review_title.setObjectName("PanelTitle")
+            overview_review_layout.addWidget(overview_review_title)
+            self.overview_video_drop_zone = VideoDropZone()
+            self.overview_video_drop_zone.video_dropped.connect(self._start_video_review)
+            self.overview_video_drop_zone.browse_requested.connect(self._browse_annotation_video)
+            overview_review_layout.addWidget(self.overview_video_drop_zone)
+            self.overview_review_status = QLabel(
+                "Drop one video to create a review automatically. Frames and notes stay local."
+            )
+            self.overview_review_status.setObjectName("Muted")
+            self.overview_review_status.setWordWrap(True)
+            overview_review_layout.addWidget(self.overview_review_status)
+            page_layout.addWidget(overview_review_panel)
+
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
             self._overview_metric_values: dict[str, QLabel] = {}
@@ -253,6 +381,42 @@ class MainWindow(QMainWindow):
                     self._overview_metric_values[key] = value_label
                 metrics.addWidget(card)
             page_layout.addLayout(metrics)
+
+            quick_actions_panel = QFrame()
+            quick_actions_panel.setObjectName("Panel")
+            quick_actions_layout = QVBoxLayout(quick_actions_panel)
+            quick_actions_layout.setContentsMargins(18, 16, 18, 18)
+            quick_actions_layout.setSpacing(10)
+            quick_actions_title = QLabel("Start here")
+            quick_actions_title.setObjectName("PanelTitle")
+            quick_actions_layout.addWidget(quick_actions_title)
+            quick_actions_hint = QLabel(
+                "Use one short review loop: attach a recording, mark what you observe, then test one change at a time."
+            )
+            quick_actions_hint.setObjectName("Muted")
+            quick_actions_hint.setWordWrap(True)
+            quick_actions_layout.addWidget(quick_actions_hint)
+            quick_actions_row = QHBoxLayout()
+            quick_actions_row.setSpacing(8)
+            self.overview_action_buttons: dict[str, QPushButton] = {}
+            for label, destination in (
+                ("Review a recording", "Session Review"),
+                ("Analyze a clip", "Clip Annotation"),
+                ("Test a setting", "Settings Lab"),
+                ("View coaching", "AI Coach"),
+            ):
+                action = QPushButton(label)
+                action.setObjectName(
+                    "PrimaryButton" if destination == "Session Review" else "SecondaryButton"
+                )
+                action.setCursor(Qt.CursorShape.PointingHandCursor)
+                action.clicked.connect(
+                    lambda checked=False, target=destination: self.show_page(target)
+                )
+                quick_actions_row.addWidget(action)
+                self.overview_action_buttons[destination] = action
+            quick_actions_layout.addLayout(quick_actions_row)
+            page_layout.addWidget(quick_actions_panel)
 
             body_row = QHBoxLayout()
             body_row.setSpacing(14)
@@ -316,7 +480,182 @@ class MainWindow(QMainWindow):
             page_layout.addWidget(empty, 1)
 
         page_layout.addStretch(1)
-        return page
+        # Keep every workspace usable on smaller Windows displays; long review and
+        # annotation pages must not silently clip their lower controls.
+        scroll_area = QScrollArea()
+        scroll_area.setObjectName("WorkspaceScrollArea")
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(page)
+        return scroll_area
+
+    def _build_preferences(self, page_layout: QVBoxLayout) -> None:
+        """Show where local data lives and expose simple privacy/data controls."""
+        page_layout.addWidget(
+            panel(
+                "Local data",
+                "Sessions, notes, settings snapshots, and experiments are stored in a local SQLite database. "
+                "Gameplay video files are referenced by path; they are not uploaded by this app.",
+            )
+        )
+
+        storage_panel = QFrame()
+        storage_panel.setObjectName("Panel")
+        storage_layout = QVBoxLayout(storage_panel)
+        storage_layout.setContentsMargins(18, 16, 18, 18)
+        storage_layout.setSpacing(10)
+        storage_heading = QLabel("Database location")
+        storage_heading.setObjectName("PanelTitle")
+        storage_layout.addWidget(storage_heading)
+        self.storage_path_label = QLabel("Checking local database location…")
+        self.storage_path_label.setWordWrap(True)
+        self.storage_path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        storage_layout.addWidget(self.storage_path_label)
+        self.storage_status_label = QLabel("")
+        self.storage_status_label.setObjectName("Muted")
+        self.storage_status_label.setWordWrap(True)
+        storage_layout.addWidget(self.storage_status_label)
+        actions = QHBoxLayout()
+        self.open_data_folder_button = QPushButton("Open data folder")
+        self.open_data_folder_button.setObjectName("SecondaryButton")
+        self.open_data_folder_button.clicked.connect(self._open_local_data_folder)
+        actions.addWidget(self.open_data_folder_button)
+        self.export_backup_button = QPushButton("Export database backup…")
+        self.export_backup_button.setObjectName("PrimaryButton")
+        self.export_backup_button.clicked.connect(self._export_database_backup)
+        actions.addWidget(self.export_backup_button)
+        refresh_button = QPushButton("Refresh")
+        refresh_button.setObjectName("SecondaryButton")
+        refresh_button.clicked.connect(self._refresh_storage_info)
+        actions.addWidget(refresh_button)
+        actions.addStretch(1)
+        storage_layout.addLayout(actions)
+        page_layout.addWidget(storage_panel)
+
+        page_layout.addWidget(
+            panel(
+                "Privacy and fair play",
+                "The preview works from recordings you select and notes you create. It does not inject into Siege, "
+                "read protected game memory, automate mouse or keyboard input, or silently change game settings. "
+                "Reports are written only when you choose an export location. Keep recordings and exported reports "
+                "private if they reveal personal information.",
+            )
+        )
+        page_layout.addWidget(
+            panel(
+                "What is not available yet",
+                "Automatic reticle/opponent detection, live-match analysis, validated overshoot classification, "
+                "and proven sensitivity recommendations are not implemented yet. Coaching prompts are based on "
+                "explicit tags you add during review and should be treated as practice hypotheses.",
+            )
+        )
+        self._refresh_storage_info()
+
+    def _refresh_storage_info(self) -> None:
+        """Refresh the visible local storage path, size, and action availability."""
+        if not hasattr(self, "storage_path_label"):
+            return
+        path = self.database_path
+        if path is None:
+            self.storage_path_label.setText("Storage path was not supplied by the application.")
+            self.storage_status_label.setText(
+                "This window was opened without a persistent database path, as in some UI tests."
+            )
+            self.open_data_folder_button.setEnabled(False)
+            self.export_backup_button.setEnabled(False)
+            return
+        if str(path) == ":memory:":
+            self.storage_path_label.setText("In-memory database (temporary)")
+            self.storage_status_label.setText(
+                "This temporary database disappears when the application closes."
+            )
+            self.open_data_folder_button.setEnabled(False)
+            self.export_backup_button.setEnabled(False)
+            return
+
+        location = path.expanduser()
+        self.storage_path_label.setText(str(location))
+        self.open_data_folder_button.setEnabled(location.parent.is_dir())
+        self.export_backup_button.setEnabled(location.is_file())
+        if not location.is_file():
+            self.storage_status_label.setText(
+                "The database file has not been created at this location yet."
+            )
+            return
+        try:
+            size_kb = max(1, (location.stat().st_size + 1023) // 1024)
+            modified = location.stat().st_mtime
+            from datetime import datetime
+
+            modified_text = datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M")
+            self.storage_status_label.setText(
+                f"Existing local database · {size_kb:,} KB · modified {modified_text}"
+            )
+        except OSError as error:
+            self.storage_status_label.setText(f"Could not inspect the database file: {error}")
+
+    def _open_local_data_folder(self) -> None:
+        """Open the directory containing the local database in the platform file manager."""
+        path = self.database_path
+        if path is None or str(path) == ":memory:":
+            self.storage_status_label.setText("A persistent local data folder is not available.")
+            return
+        folder = path.expanduser().parent
+        if not folder.is_dir():
+            self.storage_status_label.setText(f"Data folder does not exist: {folder}")
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder.resolve()))):
+            self.storage_status_label.setText(
+                "Windows could not open the data folder. You can copy the path shown above into File Explorer."
+            )
+
+    def _export_database_backup(self) -> None:
+        """Create a consistent SQLite backup without copying a live database file."""
+        path = self.database_path
+        if path is None or str(path) == ":memory:":
+            QMessageBox.information(
+                self, "Backup unavailable", "A persistent local database is not available in this window."
+            )
+            return
+        source_path = path.expanduser().resolve()
+        if not source_path.is_file():
+            QMessageBox.information(self, "Database not found", "The local database file does not exist yet.")
+            return
+        target, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export local database backup",
+            str(source_path.with_name("siegesense-backup.sqlite3")),
+            "SQLite database (*.sqlite3 *.db)",
+        )
+        if not target:
+            return
+        target_path = Path(target).expanduser().resolve()
+        if not target_path.suffix:
+            target_path = target_path.with_suffix(".sqlite3")
+        if target_path == source_path:
+            QMessageBox.warning(
+                self, "Choose a different file", "The backup must not overwrite the active database."
+            )
+            return
+        source_connection: sqlite3.Connection | None = None
+        backup_connection: sqlite3.Connection | None = None
+        try:
+            source_connection = sqlite3.connect(str(source_path))
+            backup_connection = sqlite3.connect(str(target_path))
+            source_connection.backup(backup_connection)
+        except (OSError, sqlite3.Error) as error:
+            QMessageBox.warning(
+                self, "Backup failed", f"No backup was created successfully.\n\n{error}"
+            )
+            return
+        finally:
+            if backup_connection is not None:
+                backup_connection.close()
+            if source_connection is not None:
+                source_connection.close()
+        self.storage_status_label.setText(f"Local database backup exported to {target_path}")
 
     def _build_category_review(self, page_layout: QVBoxLayout, page_name: str) -> None:
         """Show evidence from manually tagged observations for a single category."""
@@ -391,38 +730,74 @@ class MainWindow(QMainWindow):
             )
 
     def _build_ai_coach(self, page_layout: QVBoxLayout) -> None:
-        """Build transparent, rules-based review prompts from saved manual notes."""
+        """Build a transparent review assistant from user-supplied evidence."""
         page_layout.addWidget(
             panel(
-                "Coaching status",
-                "This is an evidence-linked review assistant, not a trained AI model or automatic gameplay detector. "
-                "It only summarises the notes you have saved locally.",
+                "Evidence-linked coach preview",
+                "Suggestions are generated from explicit manual tags and saved review notes. This is not a trained "
+                "AI model or automatic gameplay detector; the app will not invent a diagnosis when the evidence is missing.",
             )
         )
         refresh = QPushButton("Refresh coaching summary")
+        refresh.setObjectName("PrimaryButton")
         refresh.clicked.connect(self._refresh_ai_coach)
         page_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
+
         self.coach_summary_panel = QFrame()
         self.coach_summary_panel.setObjectName("Panel")
         coach_layout = QVBoxLayout(self.coach_summary_panel)
         coach_layout.setContentsMargins(18, 16, 18, 18)
         coach_layout.setSpacing(10)
-        coach_layout.addWidget(QLabel("Review prompts"))
+
+        coach_layout.addWidget(QLabel("Review categories"))
         self.coach_prompt_list = QListWidget()
-        self.coach_prompt_list.setMinimumHeight(180)
+        self.coach_prompt_list.setMinimumHeight(100)
         coach_layout.addWidget(self.coach_prompt_list)
+
+        coach_layout.addWidget(QLabel("Tagged patterns to verify"))
+        self.coach_pattern_list = QListWidget()
+        self.coach_pattern_list.setMinimumHeight(125)
+        self.coach_pattern_list.currentItemChanged.connect(self._show_selected_coaching_insight)
+        coach_layout.addWidget(self.coach_pattern_list)
+        self.coach_pattern_detail = QLabel(
+            "Select a tagged pattern to see its evidence and one focused practice block."
+        )
+        self.coach_pattern_detail.setObjectName("Muted")
+        self.coach_pattern_detail.setWordWrap(True)
+        coach_layout.addWidget(self.coach_pattern_detail)
+        self.coach_plan_experiment_button = QPushButton(
+            "Prepare a controlled settings experiment"
+        )
+        self.coach_plan_experiment_button.setObjectName("SecondaryButton")
+        self.coach_plan_experiment_button.setEnabled(False)
+        self.coach_plan_experiment_button.setToolTip(
+            "Enabled only for repeated sensitivity-related tags across multiple sessions. "
+            "This prepares a test hypothesis; it does not recommend or apply a settings value."
+        )
+        self.coach_plan_experiment_button.clicked.connect(
+            self._prepare_settings_experiment_from_coach
+        )
+        coach_layout.addWidget(
+            self.coach_plan_experiment_button, 0, Qt.AlignmentFlag.AlignLeft
+        )
+
         coach_layout.addWidget(QLabel("Recent evidence"))
         self.coach_evidence_list = QListWidget()
-        self.coach_evidence_list.setMinimumHeight(180)
+        self.coach_evidence_list.setMinimumHeight(130)
         coach_layout.addWidget(self.coach_evidence_list)
         page_layout.addWidget(self.coach_summary_panel, 1)
+        self._coaching_insights_by_key = {}
         self._refresh_ai_coach()
 
     def _refresh_ai_coach(self) -> None:
+        """Regenerate cautious practice prompts and show the notes behind each one."""
         if not hasattr(self, "coach_prompt_list"):
             return
         self.coach_prompt_list.clear()
+        self.coach_pattern_list.clear()
         self.coach_evidence_list.clear()
+        self.coach_plan_experiment_button.setEnabled(False)
+        self._coaching_insights_by_key = {}
         try:
             sessions = self.session_service.list_sessions() if self.session_service else []
             records = [
@@ -436,29 +811,63 @@ class MainWindow(QMainWindow):
             ]
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             self.coach_prompt_list.addItem(f"Local review data is unavailable: {error}")
+            self.coach_pattern_list.addItem("Coaching patterns are unavailable until local data can be read.")
+            self.coach_evidence_list.addItem("No evidence could be loaded.")
+            self.coach_pattern_detail.setText("Resolve the storage error before using these prompts.")
             return
         if not records:
             self.coach_prompt_list.addItem(
                 "Start with one recorded match and add a few timestamped notes in Session Review."
             )
+            self.coach_pattern_list.addItem(
+                "No tagged patterns yet. Begin by tagging an observed moment in Session Review."
+            )
             self.coach_evidence_list.addItem("No real-session observations are available yet.")
+            self.coach_pattern_detail.setText(
+                "Suggested tags: " + ", ".join(COACHING_TAG_GUIDE)
+                + ". Only tag what you can actually see."
+            )
             return
 
         counts: dict[str, int] = {}
         for _session, observation in records:
             counts[observation.kind.value] = counts.get(observation.kind.value, 0) + 1
         prompts = {
-            "aim": "Aim: revisit the logged moments and separate initial placement, first-shot timing, and target-transition control before changing sensitivity.",
-            "movement": "Movement: replay the logged moments and check whether movement timing, exposure, or crosshair placement was the issue.",
-            "positioning": "Positioning: review available cover, escape options, and the angle you chose before the engagement.",
-            "decision": "Decision-making: note the information available at the time and compare it with the decision you made.",
-            "other": "Other: clarify the observation into one specific behaviour you can check in another review.",
+            "aim": "Aim: separate pre-aim placement, initial endpoint, correction, and shot timing before changing sensitivity.",
+            "movement": "Movement: review peeking, exposure, and path choice; do not confuse screen motion with mouse input.",
+            "positioning": "Positioning: check cover, escape options, and the angle selected before the engagement.",
+            "decision": "Decision-making: compare the choice with the information available at that moment, not only the outcome.",
+            "other": "Other: refine the note into one specific behaviour you can check in another review.",
         }
         for category, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
-            self.coach_prompt_list.addItem(f"{category.title()} · {count} note(s) — {prompts[category]}")
+            self.coach_prompt_list.addItem(
+                f"{category.title()} · {count} note(s) — {prompts[category]}"
+            )
         self.coach_prompt_list.addItem(
-            "These prompts are transparent rules based on note categories, not proof of a weakness or an automatic diagnosis."
+            "These are review priorities, not proof of a weakness or an automatic diagnosis."
         )
+
+        insights = build_coaching_insights(records)
+        if not insights:
+            self.coach_pattern_list.addItem(
+                "No explicit coaching tags yet. In Session Review, try: "
+                + ", ".join(COACHING_TAG_GUIDE)
+                + "."
+            )
+            self.coach_pattern_detail.setText(
+                "Scope tags such as acog and close-range remain useful context, but they do not create a coaching claim by themselves."
+            )
+        else:
+            self._coaching_insights_by_key = {insight.key: insight for insight in insights}
+            for insight in insights:
+                item = QListWidgetItem(
+                    f"{insight.title} · {insight.observation_count} tagged note(s) · "
+                    f"{insight.session_count} session(s) · {insight.evidence_level}"
+                )
+                item.setData(Qt.ItemDataRole.UserRole, insight.key)
+                self.coach_pattern_list.addItem(item)
+            self.coach_pattern_list.setCurrentRow(0)
+
         records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
         for session, observation in records[:10]:
             seconds = observation.timestamp_ms // 1000
@@ -467,6 +876,76 @@ class MainWindow(QMainWindow):
             self.coach_evidence_list.addItem(
                 f"{session.title} · {timestamp} · {observation.kind.value.title()} · {observation.text}{tags}"
             )
+
+    def _show_selected_coaching_insight(
+        self, item: QListWidgetItem | None, _previous: QListWidgetItem | None = None
+    ) -> None:
+        """Display the supporting notes and one next drill for the selected tagged pattern."""
+        if not hasattr(self, "coach_pattern_detail"):
+            return
+        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        insight = self._coaching_insights_by_key.get(key) if key else None
+        if insight is None:
+            self.coach_plan_experiment_button.setEnabled(False)
+            return
+        self.coach_plan_experiment_button.setEnabled(
+            insight.evidence_level == "Recurring across sessions"
+            and insight.key in {"overflick", "underflick", "correction"}
+        )
+        evidence_lines: list[str] = []
+        for session, observation in insight.evidence[:3]:
+            seconds = observation.timestamp_ms // 1000
+            timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            evidence_lines.append(
+                f"{session.title} at {timestamp}: {observation.text}"
+            )
+        evidence_text = "\n".join(evidence_lines)
+        self.coach_pattern_detail.setText(
+            f"{insight.evidence_level}\n{insight.summary}\n\n"
+            f"Next practice block\n{insight.drill}\n\n"
+            f"Source notes\n{evidence_text}\n\n"
+            "Do not change sensitivity based on this prompt alone. Compare similar situations and "
+            "record the result before deciding whether to run a settings experiment."
+        )
+
+    def _prepare_settings_experiment_from_coach(self) -> None:
+        """Transfer recurring manually tagged aim evidence into an editable experiment draft."""
+        item = self.coach_pattern_list.currentItem()
+        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        insight = self._coaching_insights_by_key.get(key) if key else None
+        if (
+            insight is None
+            or insight.evidence_level != "Recurring across sessions"
+            or insight.key not in {"overflick", "underflick", "correction"}
+        ):
+            return
+
+        tags = {
+            " ".join(tag.casefold().replace("_", " ").replace("-", " ").split())
+            for _session, observation in insight.evidence
+            for tag in observation.tags
+        }
+        variable = (
+            "2.5x ADS sensitivity"
+            if any("acog" in tag or "2.5x" in tag for tag in tags)
+            else "horizontal sensitivity"
+        )
+        self.experiment_title_input.setText(f"Coach follow-up: {insight.title}")
+        self.experiment_hypothesis_input.setText(
+            f"After reviewing {insight.observation_count} manually tagged instances across "
+            f"{insight.session_count} sessions, compare similar drills with one small change "
+            f"to {variable}; keep every other setting fixed. This is a test hypothesis, not "
+            "a recommendation that the setting is wrong."
+        )
+        self.experiment_variable_input.setText(variable)
+        self.show_page("Settings Lab")
+        self.settings_status.setText(
+            f"Experiment draft prepared from {insight.title}. Verify the displayed fields "
+            "against your actual in-game settings, save that as the baseline, change only "
+            "the chosen variable for a test snapshot, then compare the snapshots before "
+            "recording a result."
+        )
+        self.experiment_title_input.setFocus()
 
     def _refresh_overview(self) -> None:
         """Refresh overview counts and review focus from real local records only."""
@@ -589,6 +1068,11 @@ class MainWindow(QMainWindow):
         self.review_media_status.setObjectName("Muted")
         self.review_media_status.setWordWrap(True)
         media_layout.addWidget(self.review_media_status)
+        self.review_sampled_frames_button = QPushButton("Open sampled-frame review")
+        self.review_sampled_frames_button.setObjectName("SecondaryButton")
+        self.review_sampled_frames_button.setEnabled(False)
+        self.review_sampled_frames_button.clicked.connect(self._open_sampled_frame_review)
+        media_layout.addWidget(self.review_sampled_frames_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.review_media_player.positionChanged.connect(self._update_media_position)
         self.review_media_player.durationChanged.connect(self._update_media_duration)
         self.review_media_player.playbackStateChanged.connect(self._update_play_button)
@@ -625,7 +1109,9 @@ class MainWindow(QMainWindow):
         timestamp_host.setLayout(timestamp_row)
         observation_form.addRow("Timestamp", timestamp_host)
         self.observation_tags_input = QLineEdit()
-        self.observation_tags_input.setPlaceholderText("Optional comma-separated tags, e.g. overshoot, acog, close-range")
+        self.observation_tags_input.setPlaceholderText(
+            "Coaching tags + context: overflick, underflick, target-switch, acog, close-range"
+        )
         self.observation_filter_input = QLineEdit()
         self.observation_filter_input.setPlaceholderText("Filter notes by text or tag…")
         self.observation_filter_input.textChanged.connect(self._refresh_observations)
@@ -633,6 +1119,17 @@ class MainWindow(QMainWindow):
         observation_form.addRow("Tags", self.observation_tags_input)
         observation_form.addRow("Observation", self.observation_text)
         review_layout.addLayout(observation_form)
+        quick_tag_row = QHBoxLayout()
+        quick_tag_row.addWidget(QLabel("Add a coaching tag:"))
+        self.coaching_tag_combo = QComboBox()
+        for tag in COACHING_TAG_GUIDE:
+            self.coaching_tag_combo.addItem(tag.replace("-", " ").title(), tag)
+        quick_tag_row.addWidget(self.coaching_tag_combo, 1)
+        self.add_coaching_tag_button = QPushButton("Add tag")
+        self.add_coaching_tag_button.setObjectName("SecondaryButton")
+        self.add_coaching_tag_button.clicked.connect(self._append_selected_coaching_tag)
+        quick_tag_row.addWidget(self.add_coaching_tag_button)
+        review_layout.addLayout(quick_tag_row)
         review_layout.addWidget(self.observation_filter_input)
         add_note = QPushButton("Add observation")
         add_note.clicked.connect(self._add_review_observation)
@@ -660,42 +1157,75 @@ class MainWindow(QMainWindow):
         source_layout = QVBoxLayout(source_panel)
         source_layout.setContentsMargins(18, 16, 18, 18)
         source_layout.setSpacing(10)
-        source_layout.addWidget(QLabel("Sample a local recording"))
-        self.annotation_video_input = QLineEdit()
-        self.annotation_video_input.setPlaceholderText("Choose a gameplay recording")
-        video_row = QHBoxLayout()
-        video_row.addWidget(self.annotation_video_input, 1)
-        browse_video = QPushButton("Browse video…")
-        browse_video.clicked.connect(self._browse_annotation_video)
-        video_row.addWidget(browse_video)
-        source_layout.addLayout(video_row)
+        source_heading = QLabel("Start a recording review")
+        source_heading.setObjectName("PanelTitle")
+        source_layout.addWidget(source_heading)
+        self.annotation_drop_zone = VideoDropZone()
+        self.annotation_drop_zone.video_dropped.connect(self._start_video_review)
+        self.annotation_drop_zone.browse_requested.connect(self._browse_annotation_video)
+        source_layout.addWidget(self.annotation_drop_zone)
 
-        self.annotation_output_input = QLineEdit()
-        self.annotation_output_input.setPlaceholderText("Choose an empty output folder for sampled frames")
+        self.annotation_sampling_progress = QProgressBar()
+        self.annotation_sampling_progress.setRange(0, 0)
+        self.annotation_sampling_progress.setTextVisible(False)
+        self.annotation_sampling_progress.setMaximumHeight(8)
+        self.annotation_sampling_progress.hide()
+        source_layout.addWidget(self.annotation_sampling_progress)
+
+        self.annotation_status = QLabel(
+            "Drop one saved video. SiegeSense will sample frames and open the review automatically. "
+            "Frame labels remain manual."
+        )
+        self.annotation_status.setObjectName("Muted")
+        self.annotation_status.setWordWrap(True)
+        source_layout.addWidget(self.annotation_status)
+
+        self.annotation_advanced_toggle = QPushButton("Advanced options  ▸")
+        self.annotation_advanced_toggle.setObjectName("SecondaryButton")
+        self.annotation_advanced_toggle.setCheckable(True)
+        self.annotation_advanced_toggle.toggled.connect(self._toggle_annotation_advanced)
+        source_layout.addWidget(self.annotation_advanced_toggle, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self.annotation_advanced_panel = QFrame()
+        advanced_layout = QVBoxLayout(self.annotation_advanced_panel)
+        advanced_layout.setContentsMargins(0, 10, 0, 0)
+        advanced_layout.setSpacing(8)
+        video_row = QHBoxLayout()
+        self.annotation_video_input = QLineEdit()
+        self.annotation_video_input.setPlaceholderText("Selected video path")
+        video_row.addWidget(self.annotation_video_input, 1)
+        self.annotation_browse_video_button = QPushButton("Browse…")
+        self.annotation_browse_video_button.clicked.connect(self._browse_annotation_video)
+        video_row.addWidget(self.annotation_browse_video_button)
+        advanced_layout.addLayout(video_row)
+
         output_row = QHBoxLayout()
+        self.annotation_output_input = QLineEdit()
+        self.annotation_output_input.setPlaceholderText("Output folder (auto-selected by default)")
         output_row.addWidget(self.annotation_output_input, 1)
         browse_output = QPushButton("Output folder…")
         browse_output.clicked.connect(self._browse_annotation_output)
         output_row.addWidget(browse_output)
-        source_layout.addLayout(output_row)
+        advanced_layout.addLayout(output_row)
 
         sampling_row = QHBoxLayout()
         sampling_row.addWidget(QLabel("Sampling interval (ms)"))
         self.annotation_interval_spin = QSpinBox()
-        self.annotation_interval_spin.setRange(50, 10000)
-        self.annotation_interval_spin.setSingleStep(50)
-        self.annotation_interval_spin.setValue(100)
+        self.annotation_interval_spin.setRange(100, 10000)
+        self.annotation_interval_spin.setSingleStep(100)
+        self.annotation_interval_spin.setValue(500)
         self.annotation_interval_spin.setToolTip(
-            "Shorter intervals create more images. This is for manual review, not precise flick timing."
+            "Default is 500 ms (about 2 frames/second) to keep reviews lighter. "
+            "This is for manual review, not precise event timing."
         )
         sampling_row.addWidget(self.annotation_interval_spin)
-        sample_button = QPushButton("Sample frames")
-        sample_button.clicked.connect(self._sample_annotation_video)
-        sampling_row.addWidget(sample_button)
+        self.annotation_sample_button = QPushButton("Sample frames manually")
+        self.annotation_sample_button.clicked.connect(self._sample_annotation_video)
+        sampling_row.addWidget(self.annotation_sample_button)
         sampling_row.addStretch(1)
-        source_layout.addLayout(sampling_row)
+        advanced_layout.addLayout(sampling_row)
 
-        source_layout.addWidget(QLabel("Or open an existing sampled-video manifest"))
+        advanced_layout.addWidget(QLabel("Open an existing sampled-video review"))
         source_row = QHBoxLayout()
         self.annotation_manifest_input = QLineEdit()
         self.annotation_manifest_input.setPlaceholderText("Choose sampling_manifest.json")
@@ -703,16 +1233,12 @@ class MainWindow(QMainWindow):
         browse_manifest = QPushButton("Browse…")
         browse_manifest.clicked.connect(self._browse_annotation_manifest)
         source_row.addWidget(browse_manifest)
-        source_layout.addLayout(source_row)
-        load_manifest_button = QPushButton("Load frames")
+        advanced_layout.addLayout(source_row)
+        load_manifest_button = QPushButton("Load existing review")
         load_manifest_button.clicked.connect(self._load_annotation_manifest)
-        source_layout.addWidget(load_manifest_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.annotation_status = QLabel(
-            "Annotations are manual labels stored locally. No video or frames are uploaded."
-        )
-        self.annotation_status.setObjectName("Muted")
-        self.annotation_status.setWordWrap(True)
-        source_layout.addWidget(self.annotation_status)
+        advanced_layout.addWidget(load_manifest_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.annotation_advanced_panel.setVisible(False)
+        source_layout.addWidget(self.annotation_advanced_panel)
         page_layout.addWidget(source_panel)
 
         review_row = QHBoxLayout()
@@ -799,10 +1325,19 @@ class MainWindow(QMainWindow):
         }
         for value in sorted(ALLOWED_LABELS):
             self.annotation_label_combo.addItem(label_titles[value], value)
+        self.annotation_target_track_input = QLineEdit()
+        self.annotation_target_track_input.setPlaceholderText(
+            "Optional · same ID for the same target in this sequence"
+        )
+        self.annotation_target_track_input.setToolTip(
+            "Manual grouping only. Reuse this ID for the same visible target across "
+            "adjacent sampled frames; change it when the target or encounter changes."
+        )
         self.annotation_annotator_input = QLineEdit("Player")
         self.annotation_note_input = QLineEdit()
         self.annotation_note_input.setPlaceholderText("Optional context for this frame")
         annotation_form.addRow("Manual label", self.annotation_label_combo)
+        annotation_form.addRow("Target / sequence ID", self.annotation_target_track_input)
         annotation_form.addRow("Annotator", self.annotation_annotator_input)
         annotation_form.addRow("Note", self.annotation_note_input)
         detail_layout.addLayout(annotation_form)
@@ -832,6 +1367,13 @@ class MainWindow(QMainWindow):
         )
         spatial_report_button.clicked.connect(self._export_spatial_report)
         history_layout.addWidget(spatial_report_button, 0, Qt.AlignmentFlag.AlignLeft)
+        transition_report_button = QPushButton("Export manual aim-transition report…")
+        transition_report_button.setToolTip(
+            "Count target-relative offset sign changes across manually tracked adjacent frames. "
+            "This does not diagnose overshoot or change settings."
+        )
+        transition_report_button.clicked.connect(self._export_aim_transition_report)
+        history_layout.addWidget(transition_report_button, 0, Qt.AlignmentFlag.AlignLeft)
         motion_report_button = QPushButton("Analyze screen-space motion…")
         motion_report_button.setToolTip(
             "Estimate visible feature movement between adjacent sampled frames; this is not mouse input or an aim score."
@@ -1016,18 +1558,172 @@ class MainWindow(QMainWindow):
         self._refresh_review_sessions(select_id=session_id)
         self.show_page("Session Review")
 
+    def _toggle_annotation_advanced(self, expanded: bool) -> None:
+        self.annotation_advanced_panel.setVisible(expanded)
+        self.annotation_advanced_toggle.setText(
+            "Advanced options  ▾" if expanded else "Advanced options  ▸"
+        )
+
+    @staticmethod
+    def _new_review_output_folder(source: Path) -> Path:
+        base = source.parent / f"{source.stem}_siegesense_review"
+        candidate = base
+        suffix = 2
+        while candidate.exists():
+            candidate = source.parent / f"{source.stem}_siegesense_review_{suffix}"
+            suffix += 1
+        return candidate
+
+    def _set_video_review_busy(self, busy: bool) -> None:
+        if hasattr(self, "annotation_sampling_progress"):
+            self.annotation_sampling_progress.setVisible(busy)
+        for name in ("overview_video_drop_zone", "annotation_drop_zone"):
+            zone = getattr(self, name, None)
+            if zone is not None:
+                zone.setEnabled(not busy)
+        button = getattr(self, "annotation_sample_button", None)
+        if button is not None:
+            button.setEnabled(not busy)
+
+    def _start_video_review(self, source_path: str) -> None:
+        """Drop/browse flow: sample a local video asynchronously and open its frames."""
+        current_worker = self._sampling_worker
+        if current_worker is not None and current_worker.isRunning():
+            self.annotation_status.setText("A review is already being prepared. Please let it finish first.")
+            return
+
+        source = Path(source_path).expanduser().resolve()
+        if not source.is_file():
+            self.annotation_status.setText("That video file could not be found. Choose it again.")
+            return
+        if source.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
+            self.annotation_status.setText("Choose a video file such as MP4, MKV, MOV, AVI, or WEBM.")
+            return
+
+        output = self._new_review_output_folder(source)
+        self.annotation_video_input.setText(str(source))
+        self.annotation_output_input.setText(str(output))
+        interval = self.annotation_interval_spin.value()
+        message = (
+            f"Preparing review for {source.name}. Sampling at {interval} ms intervals; "
+            "large videos may take a little while. The app remains responsive."
+        )
+        self.annotation_status.setText(message)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+        self._set_video_review_busy(True)
+        worker = VideoSamplingWorker(str(source), str(output), interval)
+        worker.succeeded.connect(self._on_video_review_sampled)
+        worker.failed.connect(self._on_video_review_failed)
+        worker.finished.connect(self._video_review_worker_finished)
+        self._sampling_worker = worker
+        worker.start()
+
+    def _create_or_select_video_session(self, source: Path, duration_ms: int) -> str:
+        """Create one local session for a recording, or reuse its existing session."""
+        if self.session_service is None:
+            raise RuntimeError("Session storage is not configured")
+        source_path = str(source.expanduser().resolve())
+        sessions = self.session_service.list_sessions()
+        for session in sessions:
+            if not session.media_path:
+                continue
+            try:
+                if Path(session.media_path).expanduser().resolve() == Path(source_path):
+                    return session.id
+            except (OSError, RuntimeError):
+                continue
+
+        base_title = f"Review — {source.stem}"
+        title = base_title
+        suffix = 2
+        used_titles = {session.title.casefold() for session in sessions}
+        while title.casefold() in used_titles:
+            title = f"{base_title} ({suffix})"
+            suffix += 1
+        session = self.session_service.create_session(
+            title,
+            duration_ms=max(1, int(duration_ms)),
+            media_path=source_path,
+        )
+        return session.id
+
+    def _on_video_review_sampled(self, report, output_dir: str) -> None:
+        manifest_path = Path(output_dir) / "sampling_manifest.json"
+        self.annotation_manifest_input.setText(str(manifest_path))
+        self._load_annotation_manifest()
+        if self._annotation_store is None:
+            return
+        self.review_sampled_frames_button.setEnabled(True)
+        source = Path(self.annotation_video_input.text()).expanduser().resolve()
+        try:
+            session_id = self._create_or_select_video_session(source, report.duration_ms)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            message = (
+                f"Frames are ready, but the video session could not be saved: {error}. "
+                "You can still review the sampled frames."
+            )
+            self.annotation_status.setText(message)
+            if hasattr(self, "overview_review_status"):
+                self.overview_review_status.setText(message)
+            self.show_page("Clip Annotation")
+            return
+
+        self._refresh_review_sessions(select_id=session_id)
+        self.show_page("Session Review")
+        message = (
+            f"Review ready — {len(report.frames)} sampled frames loaded and the local video session is saved. "
+            "Press Play to watch the recording, or open the sampled-frame review below."
+        )
+        self.annotation_status.setText(message)
+        self.review_status.setText(f"Recording session ready: {source.name}.")
+        self.review_media_status.setText(
+            f"Loaded local recording: {source.name}. Press Play when you are ready."
+        )
+        self.review_sampled_frames_button.setEnabled(True)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+
+    def _open_sampled_frame_review(self) -> None:
+        """Return to the latest automatically loaded sampled-frame review."""
+        if self._annotation_store is None or self._annotation_manifest_path is None:
+            self.review_media_status.setText("Drop a video on Overview to prepare a sampled-frame review first.")
+            return
+        self.show_page("Clip Annotation")
+        self.annotation_frame_preview.setFocus()
+
+    def _on_video_review_failed(self, error: str) -> None:
+        message = (
+            f"Could not prepare that review: {error} "
+            "Try another video file. The original recording was not changed."
+        )
+        self.annotation_status.setText(message)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+
+    def _video_review_worker_finished(self) -> None:
+        worker = self._sampling_worker
+        if worker is not None:
+            self._sampling_worker = None
+            worker.deleteLater()
+        self._set_video_review_busy(False)
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        worker = self._sampling_worker
+        if worker is not None and worker.isRunning():
+            self.annotation_status.setText("Finishing the current local sampling task before closing…")
+            worker.wait()
+        super().closeEvent(event)
+
     def _browse_annotation_video(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select gameplay recording",
+            "Choose a video to review",
             "",
-            "Video files (*.mp4 *.mkv *.mov *.avi *.webm);;All files (*)",
+            "Video files (*.mp4 *.mkv *.mov *.avi *.webm *.m4v);;All files (*)",
         )
         if path:
-            self.annotation_video_input.setText(path)
-            if not self.annotation_output_input.text().strip():
-                source = Path(path)
-                self.annotation_output_input.setText(str(source.parent / f"{source.stem}_frames"))
+            self._start_video_review(path)
 
     def _browse_annotation_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Choose output folder")
@@ -1093,6 +1789,7 @@ class MainWindow(QMainWindow):
             self._annotation_manifest = None
             self._annotation_store = None
             self._annotation_manifest_path = None
+            self.annotation_target_track_input.clear()
             self.annotation_frame_list.clear()
             self.annotation_history_list.clear()
             self._refresh_annotation_summary()
@@ -1101,6 +1798,8 @@ class MainWindow(QMainWindow):
             return
 
         self.annotation_frame_list.clear()
+        # Prevent a target ID from a previous recording leaking into a new dataset.
+        self.annotation_target_track_input.clear()
         self.annotation_frame_counter.setText(f"Frame 0 of {len(frames)}")
         self.annotation_previous_button.setEnabled(False)
         self.annotation_next_button.setEnabled(len(frames) > 1)
@@ -1176,6 +1875,7 @@ class MainWindow(QMainWindow):
                 self.annotation_label_combo.currentData(),
                 annotator=self.annotation_annotator_input.text(),
                 note=self.annotation_note_input.text(),
+                target_track_id=self.annotation_target_track_input.text(),
                 **self.annotation_frame_preview.point_coordinates(),
             )
         except (OSError, ValueError, RuntimeError) as error:
@@ -1215,6 +1915,35 @@ class MainWindow(QMainWindow):
         self.annotation_status.setText(
             f"Manual spatial-offset report exported to {written}. "
             "Only manually marked point pairs are included; this is not aim accuracy."
+        )
+
+    def _export_aim_transition_report(self) -> None:
+        """Export sign changes from manually marked points on identified targets."""
+        store = self._annotation_store
+        if store is None or not store.dataset_path.is_file():
+            self.annotation_status.setText(
+                "Load and save a local annotation dataset before exporting aim transitions."
+            )
+            return
+        default_path = store.dataset_path.parent / "aim-transition-report.json"
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export manual aim-transition report",
+            str(default_path),
+            "JSON report (*.json)",
+        )
+        if not output_path:
+            return
+        if not Path(output_path).suffix:
+            output_path = f"{output_path}.json"
+        try:
+            written = write_aim_transition_report(store.dataset_path, output_path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.annotation_status.setText(f"Aim-transition report export failed: {error}")
+            return
+        self.annotation_status.setText(
+            f"Manual aim-transition report exported to {written}. It counts target-relative "
+            "offset sign changes only; it does not diagnose overshoot or recommend sensitivity."
         )
 
     def _export_annotation_report(self) -> None:
@@ -1291,13 +2020,30 @@ class MainWindow(QMainWindow):
                 f"{spatial.median_vertical_offset_pct:+.2f}% frame height vertically, "
                 f"{spatial.median_distance_pct_frame_diagonal:.2f}% frame diagonal"
             )
+        try:
+            transition = summarize_aim_transitions(store.dataset_path)
+        except (OSError, ValueError, KeyError, TypeError):
+            transition = None
+        if transition is None:
+            transition_text = "manual target-relative transition counts unavailable"
+        elif transition.sampling_interval_ms is None:
+            transition_text = (
+                "manual target-relative transition counts unavailable without a known sample interval"
+            )
+        else:
+            transition_text = (
+                f"manual target-relative offset sign changes: horizontal "
+                f"{transition.horizontal_sign_change_count}, vertical "
+                f"{transition.vertical_sign_change_count}; eligible same-target pairs: "
+                f"{transition.eligible_adjacent_pair_count}"
+            )
         self.annotation_summary_label.setText(
             f"Manual frame labels · on target: {summary.crosshair_on_target_frames} · "
             f"off target: {summary.crosshair_off_target_frames} · "
             f"selected-frame on-target share: {share_text} · "
             f"transitions: {summary.target_transition_frames} · "
             f"ambiguous: {summary.ambiguous_frames} · unusable: {summary.unusable_frames}. "
-            f"{sequence_text}. {spatial_text}. "
+            f"{sequence_text}. {spatial_text}. {transition_text}. "
             "Observed sampled spans are not precise event durations. Spatial offsets use manually "
             "marked points and are geometric measurements, not hit accuracy. Descriptive only; "
             "not aim accuracy or representative gameplay performance."
@@ -1309,9 +2055,10 @@ class MainWindow(QMainWindow):
             return
         for annotation in self._annotation_store.annotations:
             note = f" — {annotation.note}" if annotation.note else ""
+            track = f" · target {annotation.target_track_id}" if annotation.target_track_id else ""
             item = QListWidgetItem(
                 f"{annotation.timestamp_ms / 1000:.2f}s  ·  "
-                f"{annotation.label.replace('_', ' ')}{note}"
+                f"{annotation.label.replace('_', ' ')}{track}{note}"
             )
             item.setData(Qt.ItemDataRole.UserRole, annotation.annotation_id)
             self.annotation_history_list.addItem(item)
@@ -1327,6 +2074,7 @@ class MainWindow(QMainWindow):
         if annotation is None:
             return
         self.annotation_annotator_input.setText(annotation.annotator)
+        self.annotation_target_track_input.setText(annotation.target_track_id or "")
         self.annotation_note_input.setText(annotation.note)
         label_index = self.annotation_label_combo.findData(annotation.label)
         if label_index >= 0:
@@ -1480,7 +2228,7 @@ class MainWindow(QMainWindow):
         form = QFormLayout()
         self.settings_label_input = QLineEdit("Baseline")
         form.addRow("Snapshot name", self.settings_label_input)
-        self.settings_spinboxes: dict[str, QSpinBox] = {}
+        self.settings_spinboxes: dict[str, QSpinBox | QDoubleSpinBox] = {}
         for key, label, minimum, maximum, value in (
             ("horizontal", "Horizontal sensitivity", 1, 100, 6),
             ("vertical", "Vertical sensitivity", 1, 100, 6),
@@ -1488,13 +2236,64 @@ class MainWindow(QMainWindow):
             ("ads_2_5x", "2.5× ADS", 1, 200, 44),
             ("ads_3_5x", "3.5× ADS", 1, 200, 40),
             ("ads_8x", "8.0× ADS", 1, 200, 36),
+            ("ads_global", "Global ADS sensitivity (INI)", 1, 200, 50),
         ):
             control = QSpinBox()
             control.setRange(minimum, maximum)
             control.setValue(value)
             self.settings_spinboxes[key] = control
             form.addRow(label, control)
+
+        dpi_control = QSpinBox()
+        dpi_control.setRange(100, 25600)
+        dpi_control.setSingleStep(100)
+        dpi_control.setValue(800)
+        dpi_control.setToolTip(
+            "Record the DPI profile actually active in your mouse software. SiegeSense does not change it."
+        )
+        self.settings_spinboxes["mouse_dpi"] = dpi_control
+        form.addRow("Mouse DPI", dpi_control)
+
+        multiplier_control = QDoubleSpinBox()
+        multiplier_control.setDecimals(6)
+        multiplier_control.setRange(0.000001, 1.0)
+        multiplier_control.setSingleStep(0.001)
+        multiplier_control.setValue(0.020000)
+        multiplier_control.setToolTip(
+            "Enter MouseSensitivityMultiplierUnit from the active Siege configuration."
+        )
+        self.settings_spinboxes["sensitivity_multiplier"] = multiplier_control
+        form.addRow("Mouse sensitivity multiplier", multiplier_control)
+
+        ads_multiplier_control = QDoubleSpinBox()
+        ads_multiplier_control.setDecimals(6)
+        ads_multiplier_control.setRange(0.000001, 1.0)
+        ads_multiplier_control.setSingleStep(0.001)
+        ads_multiplier_control.setValue(0.020000)
+        ads_multiplier_control.setToolTip(
+            "Enter ADSMouseMultiplierUnit from the active Siege configuration."
+        )
+        self.settings_spinboxes["ads_sensitivity_multiplier"] = ads_multiplier_control
+        form.addRow("ADS sensitivity multiplier", ads_multiplier_control)
         layout.addLayout(form)
+
+        import_row = QHBoxLayout()
+        self.import_game_settings_button = QPushButton("Import GameSettings.ini…")
+        self.import_game_settings_button.setObjectName("SecondaryButton")
+        self.import_game_settings_button.setToolTip(
+            "Read recognized settings from one file you select. The importer never writes the game file."
+        )
+        self.import_game_settings_button.clicked.connect(self._import_game_settings)
+        import_row.addWidget(self.import_game_settings_button)
+        import_row.addStretch(1)
+        layout.addLayout(import_row)
+        self.settings_import_status = QLabel(
+            "Optional: import the active GameSettings.ini. Verify every field before saving a baseline."
+        )
+        self.settings_import_status.setObjectName("Muted")
+        self.settings_import_status.setWordWrap(True)
+        layout.addWidget(self.settings_import_status)
+
         save_button = QPushButton("Save settings snapshot")
         save_button.clicked.connect(self._save_settings_snapshot)
         layout.addWidget(save_button, 0, Qt.AlignmentFlag.AlignLeft)
@@ -1559,6 +2358,58 @@ class MainWindow(QMainWindow):
         experiment_layout.addWidget(self.settings_status)
         page_layout.addWidget(experiment_panel, 1)
         self._refresh_settings_data()
+
+    def _import_game_settings(self) -> None:
+        """Read a user-selected GameSettings.ini into only explicitly mapped controls."""
+        suggested_folder = (
+            Path.home() / "Documents" / "My Games" / "Rainbow Six - Siege"
+        )
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Import GameSettings.ini (read-only)",
+            str(suggested_folder),
+            "Game settings (GameSettings.ini);;INI files (*.ini);;All files (*)",
+        )
+        if not path:
+            return
+        try:
+            imported = read_game_settings_ini(path)
+        except (OSError, ValueError) as error:
+            self.settings_import_status.setText(
+                f"Import failed; no fields were changed. {error}"
+            )
+            return
+
+        for key, value in imported.values.items():
+            control = self.settings_spinboxes.get(key)
+            if control is not None:
+                control.setValue(value)
+
+        mapped_labels = [
+            f"{key.replace('_', ' ').title()}={value:g}"
+            for key, value in imported.values.items()
+        ]
+        missing_labels = [
+            key.replace("_", " ").title()
+            for key in self.settings_spinboxes
+            if key not in imported.values
+        ]
+        details = [
+            f"Read {Path(imported.source_path).name} without writing to it.",
+            "Imported: " + (", ".join(mapped_labels) if mapped_labels else "none"),
+            "Left unchanged for manual verification: " + (", ".join(missing_labels) if missing_labels else "none"),
+            "DPI is not stored in GameSettings.ini. Per-scope keys with names such as 2x/3x are not "
+            "guessed as 2.5x/3.5x/8x values; verify those values in the current in-game UI.",
+        ]
+        if imported.additional_ads_keys:
+            details.append(
+                "Additional ADS keys found but not auto-mapped: "
+                + ", ".join(imported.additional_ads_keys)
+            )
+        if imported.warnings:
+            details.extend(imported.warnings)
+        details.append("Review the populated fields, then save a baseline only after confirming them.")
+        self.settings_import_status.setText("\n".join(details))
 
     def _save_settings_snapshot(self) -> None:
         if self.settings_service is None:
@@ -2029,6 +2880,29 @@ class MainWindow(QMainWindow):
         self.observation_timestamp.setValue(milliseconds // 1000)
         self.review_status.setText(f"Jumped to observation at {timestamp}.")
 
+    def _append_selected_coaching_tag(self) -> None:
+        """Append a supported coaching tag without duplicating an existing tag."""
+        if not hasattr(self, "coaching_tag_combo") or not hasattr(self, "observation_tags_input"):
+            return
+        selected = self.coaching_tag_combo.currentData()
+        if not selected:
+            return
+        tags = [
+            tag.strip()
+            for tag in self.observation_tags_input.text().split(",")
+            if tag.strip()
+        ]
+        normalized_existing = {
+            " ".join(tag.casefold().replace("_", " ").replace("-", " ").split())
+            for tag in tags
+        }
+        normalized_selected = " ".join(
+            str(selected).casefold().replace("_", " ").replace("-", " ").split()
+        )
+        if normalized_selected not in normalized_existing:
+            tags.append(str(selected))
+            self.observation_tags_input.setText(", ".join(tags))
+
     def _add_review_observation(self) -> None:
         if self.session_service is None:
             QMessageBox.warning(self, "Storage unavailable", "Session storage has not been configured.")
@@ -2065,6 +2939,12 @@ class MainWindow(QMainWindow):
         """Select a page and keep the active navigation state in sync."""
         if name == "Clip Annotation":
             self._refresh_annotation_sessions()
+        elif name == "AI Coach":
+            self._refresh_ai_coach()
+        elif name == "Preferences & Privacy":
+            self._refresh_storage_info()
+        elif name == "Overview":
+            self._refresh_overview()
         index = [item[0] for item in NAV_ITEMS].index(name)
         self.page_stack.setCurrentIndex(index)
         self.breadcrumb.setText(f"Workspace  /  {name}")

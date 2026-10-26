@@ -2,15 +2,15 @@
 
 **Status:** In development — not ready to claim precise, automated coaching yet  
 **Last updated:** 2026-10-26  
-**Working branch:** `feat/annotated-sequence-metrics`  
-**Related review:** [Draft PR #14](https://github.com/IliasK151/siegesense-ai/pull/14)  
+**Working branch:** `feat/usable-coach-workflow`  
+**Current draft review:** [PR #16](https://github.com/IliasK151/siegesense-ai/pull/16) (stacked on [PR #14](https://github.com/IliasK151/siegesense-ai/pull/14))  
 **Project goal:** A local-first Windows desktop coach that analyzes recorded Rainbow Six Siege gameplay and helps players understand aim, movement, decisions, and settings through evidence-backed feedback.
 
 This document is the handoff and source of truth for continuing work across multiple chats. Update the status and evidence as each piece is completed. “Implemented” means code exists; it does not mean the feature is validated on real gameplay.
 
 ## 1. Work completed so far
 
-The items below describe work present on the current working branch as recorded in the project history. They still need a fresh end-to-end review and a passing CI run at the latest commit before being considered release-verified.
+The items below describe work present on the current working branch as recorded in the project history. The latest CI run is green, but that does not replace a fresh end-to-end review or a real Windows smoke test.
 
 ### Session and data foundations
 - Session media fingerprinting with chunked SHA-256, stored fingerprint support, and database schema v2 migration.
@@ -50,10 +50,10 @@ The items below describe work present on the current working branch as recorded 
 
 ### Documentation and automated checks
 - README, annotation guide, analysis validation plan, and roadmap describe the current limitations.
-- CI has previously passed on Python 3.10, 3.11, and 3.12 for earlier commits.
+- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) passed on Python 3.10, 3.11, and 3.12. Each job reported 163 passed and 2 skipped; `ruff check .` passed in all three jobs. The two skips are optional OpenCV tests because `cv2` is not installed in CI.
 - A missing `pytest` import was found in the motion UI test and patched; subsequent work added manual coordinate marking, spatial-offset reports, and label-transition summaries.
 - Local Windows test kit added: `scripts/setup_windows.ps1`, `scripts/run_windows.ps1`, `scripts/check_windows.ps1`, and `scripts/package_windows.ps1`; user guide: [`docs/TEST_YOUR_OWN_SIEGE_CLIP.md`](TEST_YOUR_OWN_SIEGE_CLIP.md). These scripts have been committed but have not been executed on a real Windows environment.
-- **Current blocker — pre-run runner failure confirmed:** latest observed Quality run [`40289455674`](https://github.com/IliasK151/siegesense-ai/actions/runs/40289455674) and Windows package run [`40289448635`](https://github.com/IliasK151/siegesense-ai/actions/runs/40289448635) failed with `runner_id: 0`, an empty `runner_name`, no recorded steps, and no available log archive. A minimal diagnostic workflow on separate branch `diagnostics/actions-runner-provisioning-2026-10-26` also failed before steps on both `ubuntu-latest` and `windows-latest` in run [`40288108516`](https://github.com/IliasK151/siegesense-ai/actions/runs/40288108516) (jobs `121456486787` and `121456487241`). The failures happen before checkout, Python, tests, lint, or app code and are not Windows-runner-specific. GitHub's public status page showed Actions operational when checked on 2026-10-26 ([status page](https://www.githubstatus.com/)); that does not rule out account-specific runner entitlement, billing/spending limits, or repository Actions restrictions. Community reports describe similar zero-step allocation symptoms, including cases where billing entitlements required support investigation ([runner-allocation discussion](https://github.com/orgs/community/discussions/207125), [billing-entitlement discussion](https://github.com/orgs/community/discussions/205214)); these are patterns, not proof of this account's cause. Check repository Settings → Actions → General and account Actions usage/budget and billing notifications. If those look normal, contact GitHub Support with the run/job IDs. Do not change app code in response to these pre-run failures. Tests, lint, packaging, and smoke-test status remain unverified until actual steps execute.
+- **Latest Quality CI is green:** [run 40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) executed successfully on Windows for Python 3.10, 3.11, and 3.12. Each environment reported 163 passed and 2 skipped; Ruff passed in all jobs. The skips are the optional optical-flow tests because OpenCV is not installed in CI. This verifies tests and lint for that commit only; it does not validate packaged builds or the full workflow with real recordings. The repository is now public to enable hosted runners, so review the current tree and Git history for secrets and personal/private data.
 
 ## 2. Not ready yet — release blockers
 
@@ -62,8 +62,8 @@ These are required before we can honestly call the product ready as a usable *au
 ### P0 — establish a reproducible, working baseline
 - [x] Add Windows one-click setup/launch and check/package scripts plus a personal-recording test guide. These are code/documentation additions only; execution on Windows remains unverified.
 - [ ] Download the feature-branch source ZIP on Windows, double-click `START_SIEGESENSE.bat` to install and launch, then run `CHECK_SIEGESENSE.bat`. Fix any concrete script, dependency, test, or lint errors surfaced locally.
-- [ ] Resolve the pre-run Actions failure: inspect repository Settings → Actions → General and account Actions usage/budget and billing notifications. Both Ubuntu and Windows no-op probes failed before their first step. If settings look normal, contact GitHub Support referencing diagnostic run `40288108516`, jobs `121456486787` and `121456487241`, plus current Quality run `40290166162` and Windows package run `40290161924`.
-- [ ] Check latest GitHub Actions run for all supported Python versions; fix every test, lint, packaging, and type-check failure.
+- [x] Restore hosted Quality workflow execution. Making the repository public allowed the Windows runners to initialize and execute all test/lint steps; latest Quality run `40299057942` is green. This does not establish packaging or local end-to-end readiness. Because the repository is public, review the current tree and full Git history for accidentally committed secrets or private data.
+- [x] Verify the latest Python 3.10/3.11/3.12 Quality matrix: all three jobs pass, with 161 tests passed and 2 optional OpenCV tests skipped per job; Ruff passes in all three. Packaging and real-media Windows smoke tests remain separate tasks.
 - [ ] Review the current branch diff and PR #14 for accidental changes, duplicate code, API inconsistencies, and broken UI paths.
 - [ ] Run the app from a clean environment using documented install steps; verify database migration from an existing v1 database.
 - [ ] Smoke-test the complete desktop flow: create session, import/sample recording, annotate frames, link review notes, export reports, close/reopen app, and verify persisted data.
@@ -146,13 +146,61 @@ Use one phase per chat to keep work manageable. Each phase should end with: code
 
 Start by reading this file and the current branch/PR state. Do not assume the prior chat's last CI status is current.
 
-- Current branch: `feat/annotated-sequence-metrics`
-- Review PR: [#14](https://github.com/IliasK151/siegesense-ai/pull/14)
-- First task: **Piece 1 — baseline audit and CI repair**
-- Feature-branch starting commit for the runner diagnostic: `e7f1ea2517613870a0be980d7b4ce4cd8cfa2c7c`. Read the live branch head before the next edit.
-- Latest observed Quality checks run: [40289455674](https://github.com/IliasK151/siegesense-ai/actions/runs/40289455674) — Python 3.10/3.11/3.12 jobs failed before steps; no test/lint result is available.
-- Latest observed Windows package run: [40289448635](https://github.com/IliasK151/siegesense-ai/actions/runs/40289448635) — failed before checkout/build/smoke-test steps; packaging is unverified.
-- First action: use the new local Windows test kit if a Windows machine is available, while investigating why hosted Actions never allocate runners. Check Actions permissions, account usage/budget and billing notices, then contact GitHub Support if those appear normal. Keep the diagnostic branch separate; it has not been merged. Once any jobs start executing, copy the first real test/lint/build failure and fix that root cause.
-- The local test kit has not yet been executed on Windows. If hosted Actions remains unavailable, run setup/check/package locally from a clean Windows checkout and record the outcome. Then audit optional vision dependency installation, all UI/report paths, database migration, and the packaged-app smoke test. Update this roadmap only with verified outcomes.
+- Current branch: `feat/usable-coach-workflow`
+- Current draft review: [PR #16](https://github.com/IliasK151/siegesense-ai/pull/16), stacked on [PR #14](https://github.com/IliasK151/siegesense-ai/pull/14). Neither has been merged.
+- Latest verified code commit: `b3d0039f87aafc21d28fecf7427561a78568d803`
+- Latest Quality run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) — green across Python 3.10/3.11/3.12; each job reports 163 passed, 2 skipped, and Ruff passed.
+- Next task: **run clean-install, package, and real-media smoke tests on Windows**, including migration from an existing v1 database and optional OpenCV dependency behavior.
+- The Windows scripts and user test guide are committed but have not yet been run on the user's Windows PC. Record concrete output from setup/check/package and fix any issue found. Keep PR #16 in draft until baseline review and smoke tests are complete.
 - Do not merge PRs unless the user explicitly asks.
 - Do not claim accuracy, detection, coaching validation, or release readiness without recorded evidence.
+
+
+## Usability slice — 2026-10-26
+
+Branch: `feat/usable-coach-workflow` (stacked on `feat/annotated-sequence-metrics`; no merge performed).
+
+Changes implemented in code:
+- Added a prominent drag-and-drop video zone on Overview and Clip Annotation, with a browse fallback for users who prefer choosing a file.
+- Dropped videos are sampled asynchronously at a lighter 500 ms default interval into a new non-overwriting sibling review folder; the UI remains responsive and loads the sampled frames automatically.
+- The app creates or reuses a local Session Review record for the video, opens its local playback player, and exposes a single button to move into the sampled-frame review.
+- Added scroll containers around each workspace so lower controls in long pages remain reachable at smaller window sizes.
+- Added Overview shortcuts for Session Review, Clip Annotation, Settings Lab, and AI Coach.
+- Added a Preferences & Privacy workspace that displays the database location and file status, opens the local data folder, and exports a consistent SQLite backup without copying a live database file directly.
+- Added a deterministic coaching aggregation service driven by explicitly entered tags. It groups overflick/underflick, target-switch, crosshair-placement, correction, recoil, movement, positioning, and decision tags into one focused practice block with source notes.
+- Evidence is described as a single note, repeated in one session, or recurring across sessions. Free text alone does not trigger a diagnosis; no insight is described as proof or as a validated detection.
+- Added service-level tests for tag aliases, note deduplication, across-session evidence, and conservative wording, plus UI/backup coverage.
+
+Verification caveat:
+- These edits are committed to the feature branch but have not yet been run on the user's Windows PC.
+- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) is green: 163 passed and 2 skipped in each Python version, with Ruff passing. The app has not yet been smoke-tested on the user's Windows PC.
+- This does not complete the overall product. Automatic reticle/opponent detection, robust temporal event analysis, validated settings recommendations, and real-media Windows validation remain release blockers.
+
+
+## Manual temporal offset evidence — integration into usability branch
+
+The manually tracked target-relative offset analysis from draft PR #15 is included in this branch's Clip Annotation path:
+- annotations can store an optional normalized manual target/sequence ID without breaking older schema-v1 datasets;
+- same-target point offsets are compared only for annotated samples exactly one known sampling interval apart;
+- UI summary displays horizontal/vertical offset sign-change counts and eligible same-target pair counts;
+- a local JSON report records exclusions and explicitly states that automatic detection, overshoot diagnosis, and aim-accuracy evaluation were not performed;
+- report export protects the source video, manifest, annotation dataset, and sampled frame files from overwrite.
+
+This is additional review evidence, not automatic aim detection. The latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) passes tests and lint; the feature still remains unverified in a real Windows PC workflow and does not provide automatic aim detection.
+
+
+## Settings experiment context additions
+
+Settings Lab records mouse DPI and the active `MouseSensitivityMultiplierUnit` value alongside horizontal/vertical sensitivity and ADS multipliers. These are user-entered configuration context, not automatically detected from the mouse driver or game. Before saving a baseline, users must verify every field against their own active configuration; the app never applies changes.
+
+
+## Read-only game configuration import
+
+A user-selected `GameSettings.ini` importer reads the `[INPUT]` section without writing to the source file. It maps only explicit values for horizontal/vertical sensitivity, hip-fire/ADS multipliers, global ADS and the exact 1x ADS key. Other scope-specific entries are disclosed rather than guessed across differing UI labels. DPI remains user-entered. Service and UI tests are added; Windows execution is still unverified.
+
+
+## Current CI and verification status — 2026-10-26
+
+Latest Quality CI run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942). Python 3.10, 3.11, and 3.12 jobs all passed; each reported 163 passed, 2 skipped, and successful Ruff checks. Two optional tests skipped because OpenCV is not installed in the CI environment. Hosted runner initialization is now working for this workflow.
+
+Still outstanding: run the setup, check, and package scripts on a clean Windows machine; install or intentionally document optional OpenCV behavior; verify real video/frame playback, database migration, and end-to-end persistence; and audit the public repository's full Git history for secrets or private data. The current draft PR remains [#16](https://github.com/IliasK151/siegesense-ai/pull/16) and must not be merged until these checks are reviewed.
