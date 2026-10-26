@@ -156,3 +156,21 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 - The local test kit has not yet been executed on Windows. If hosted Actions remains unavailable, run setup/check/package locally from a clean Windows checkout and record the outcome. Then audit optional vision dependency installation, all UI/report paths, database migration, and the packaged-app smoke test. Update this roadmap only with verified outcomes.
 - Do not merge PRs unless the user explicitly asks.
 - Do not claim accuracy, detection, coaching validation, or release readiness without recorded evidence.
+
+
+## Usability slice — 2026-10-26
+
+Branch: `feat/usable-coach-workflow` (stacked on `feat/annotated-sequence-metrics`; no merge performed).
+
+Changes implemented in code:
+- Added scroll containers around each workspace so lower controls in long pages remain reachable at smaller window sizes.
+- Added Overview shortcuts for Session Review, Clip Annotation, Settings Lab, and AI Coach.
+- Added a Preferences & Privacy workspace that displays the database location and file status, opens the local data folder, and exports a consistent SQLite backup without copying a live database file directly.
+- Added a deterministic coaching aggregation service driven by explicitly entered tags. It groups overflick/underflick, target-switch, crosshair-placement, correction, recoil, movement, positioning, and decision tags into one focused practice block with source notes.
+- Evidence is described as a single note, repeated in one session, or recurring across sessions. Free text alone does not trigger a diagnosis; no insight is described as proof or as a validated detection.
+- Added service-level tests for tag aliases, note deduplication, across-session evidence, and conservative wording, plus UI/backup coverage.
+
+Verification caveat:
+- These edits are committed to the feature branch but have not yet been run on the user's Windows PC.
+- Hosted GitHub Actions previously failed before runner allocation; a live green test/lint result has not been established for this slice.
+- This does not complete the overall product. Automatic reticle/opponent detection, robust temporal event analysis, validated settings recommendations, and real-media Windows validation remain release blockers.
