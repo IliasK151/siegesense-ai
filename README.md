@@ -46,10 +46,11 @@ For the fastest path to trying your own recording, follow the [Windows clip-test
 
 ## Development setup
 
-Recommended PowerShell path on Windows:
+**Simplest Windows path:** after extracting the source ZIP, double-click `START_SIEGESENSE.bat`. On first launch, it checks for the Python Launcher, runs the setup script if the project environment is missing, and then starts the app. It needs Python 3.12 for Windows and an internet connection for the initial dependency install. To run tests and lint, double-click `CHECK_SIEGESENSE.bat`.
+
+For a PowerShell workflow, use:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup_windows.ps1
 .\scripts\run_windows.ps1
 ```
