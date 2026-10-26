@@ -97,3 +97,8 @@ No license has been selected yet. Until one is added, all rights are reserved by
 
 
 The manual sequence summary also counts adjacent off-target→on-target and on-target→off-target label transitions when the sampling interval is known. These are counts of consecutive reviewed labels only; gaps, missing labels, and unknown intervals are not inferred, and the counts are not validated aim-correction metrics.
+
+
+## Manual temporal aim review
+
+Clip Annotation can also count target-relative offset sign changes when you manually mark reticle and target points and assign a consistent target/sequence ID across adjacent sampled frames. The sampling interval must be known and adjacent samples must be exactly one interval apart. Read the [annotation guide](docs/ANNOTATION_GUIDE.md) for the workflow and evidence limitations. These counts are manual review cues, not automatic overshoot detection or aim-accuracy scores.
