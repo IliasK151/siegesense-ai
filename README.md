@@ -40,11 +40,21 @@ See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md),
 
 ## Windows preview package
 
-A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow), or by pushing a version tag. The workflow runs tests and lint before packaging, then launches the packaged executable in an offscreen smoke-test mode to verify that the bundled UI, navigation, and local database initialize. This is not a substitute for installing it on a separate clean Windows machine or checking real-video codecs. The artifact is a preview, not a validated aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
+A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow). If hosted runners are unavailable, the same intended local path is provided in `scripts/package_windows.ps1`; it installs the dependencies, runs tests and lint, builds with PyInstaller, and smoke-tests the packaged executable before creating `dist/SiegeSenseAI-Windows-x64.zip`. The local script has been added but still needs to be executed on a supported Windows machine. Neither a successful startup smoke test nor a package build verifies video codecs or coaching accuracy.
+
+For the fastest path to trying your own recording, follow the [Windows clip-testing guide](docs/TEST_YOUR_OWN_SIEGE_CLIP.md). It explains how to set up, launch, check, and package the preview. The artifact remains an early local recording-review and manual-annotation prototype, not a validated automatic aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
 
 ## Development setup
 
-From PowerShell on Windows:
+Recommended PowerShell path on Windows:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup_windows.ps1
+.\scripts\run_windows.ps1
+```
+
+The setup script uses Python 3.12, creates a project-local virtual environment, and installs the application plus developer and vision dependencies. If you prefer to run the steps manually:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -54,14 +64,7 @@ pip install -e ".[dev,vision]"
 python main.py
 ```
 
-If you prefer not to install the package in editable mode, set `PYTHONPATH=src` before launching. Editable install is the recommended path. The `vision` extra installs OpenCV for the local frame-sampling workflow.
-
-Run checks:
-
-```powershell
-pytest
-ruff check .
-```
+Run local checks through `.\scripts\check_windows.ps1`, or activate the virtual environment and use `python -m pytest` followed by `python -m ruff check .`. The `vision` extra installs OpenCV for local frame sampling.
 
 ## Review a gameplay recording locally
 
