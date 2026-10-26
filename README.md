@@ -102,3 +102,8 @@ The manual sequence summary also counts adjacent off-target→on-target and on-t
 ## Manual temporal aim review
 
 Clip Annotation can also count target-relative offset sign changes when you manually mark reticle and target points and assign a consistent target/sequence ID across adjacent sampled frames. The sampling interval must be known and adjacent samples must be exactly one interval apart. Read the [annotation guide](docs/ANNOTATION_GUIDE.md) for the workflow and evidence limitations. These counts are manual review cues, not automatic overshoot detection or aim-accuracy scores.
+
+
+### Read-only GameSettings.ini import
+
+Settings Lab includes **Import GameSettings.ini…** for a file you select. It reads recognized values from `[INPUT]`, leaves unsupported scope mappings untouched, and does not write to the source file. Verify the imported fields and manually confirm DPI and current per-scope sensitivity values before saving a baseline.
