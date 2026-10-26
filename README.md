@@ -4,7 +4,7 @@
 
 SiegeSense AI is intended to help players understand their aim, movement, settings, and decision patterns through reviewable evidence—not vague advice or fabricated metrics.
 
-> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. The app now has an initial, limited screen-space motion estimator for sampled frames using sparse optical flow. It reports visible feature displacement and a descriptive coherent-feature ratio; it does not detect opponents, measure mouse input, or score aim. The Clip Annotation workspace can sample local recordings, label frames, manually mark reticle/target points, display descriptive summaries, and export local evaluation, spatial-offset, and motion reports, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy.
+> **Current status:** Early development. Session Review and Settings Lab now have local-storage workflows for sessions, timestamped observations, settings snapshots, and experiments; experiments with a test snapshot are checked to ensure exactly one setting differs from baseline. A recorded-video player UI is integrated; real-media codec verification and original-MVP data migration remain outstanding. The app now has an initial, limited screen-space motion estimator for sampled frames using sparse optical flow. It reports visible feature displacement and a descriptive coherent-feature ratio; it does not detect opponents, measure mouse input, or score aim. The Clip Annotation workspace can sample local recordings, label frames, manually mark reticle/target points, display descriptive summaries, and export local evaluation, spatial-offset, and motion reports, while offline utilities summarize human-labelled frame coverage, reviewer agreement, and consecutive-frame label runs when sample timing is known; any on-target share is descriptive only and is not aim accuracy. The AI Coach groups explicitly tagged review notes into cautious, evidence-linked practice prompts; it is deterministic rules-based guidance, not a trained AI model or automatic detector.
 
 ## Product principles
 
@@ -25,7 +25,7 @@ SiegeSense AI is intended to help players understand their aim, movement, settin
 6. AI Coach
 7. Preferences & Privacy
 
-Overview, Session Review, and Settings Lab have initial functional workflows. Aim Lab, Movement, AI Coach, and Preferences & Privacy remain scaffolded. The recorded-video player still needs verification against representative real clips. Recorded-footage analysis and measurable coaching capabilities will be delivered as separate, testable increments.
+Overview includes direct workflow shortcuts. Aim Lab and Movement show manually tagged observations; AI Coach groups supported manual tags into practice prompts and shows their source observations; Preferences & Privacy displays the local database path, opens its folder, and exports a consistent SQLite backup. These are manual-review workflows, not automated gameplay analysis. The recorded-video player still needs verification against representative real clips.
 
 ## Technology
 
@@ -42,7 +42,7 @@ See [architecture](docs/ARCHITECTURE.md), [product scope](docs/PRODUCT_SPEC.md),
 
 A Windows x64 preview package can be built from GitHub Actions using the **Windows package** workflow (Actions → Windows package → Run workflow). If hosted runners are unavailable, the same intended local path is provided in `scripts/package_windows.ps1`; it installs the dependencies, runs tests and lint, builds with PyInstaller, and smoke-tests the packaged executable before creating `dist/SiegeSenseAI-Windows-x64.zip`. The local script has been added but still needs to be executed on a supported Windows machine. Neither a successful startup smoke test nor a package build verifies video codecs or coaching accuracy.
 
-For the fastest path to trying your own recording, follow the [Windows clip-testing guide](docs/TEST_YOUR_OWN_SIEGE_CLIP.md). It explains how to set up, launch, check, and package the preview. The artifact remains an early local recording-review and manual-annotation prototype, not a validated automatic aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
+For the fastest path to trying your own recording, follow the [Windows clip-testing guide](docs/TEST_YOUR_OWN_SIEGE_CLIP.md). Read [coaching tags and evidence limits](docs/COACHING_TAGS_AND_LIMITS.md) for supported tags and how prompts are kept cautious. The clip guide explains how to set up, launch, check, and package the preview. The artifact remains an early local recording-review and manual-annotation prototype, not a validated automatic aim coach; complete the [release-readiness checks](docs/RELEASE_READINESS.md) before distributing it as a reliable performance tool.
 
 ## Development setup
 
