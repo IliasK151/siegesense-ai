@@ -1,8 +1,8 @@
 """Integration tests for the graphical local clip annotation workflow."""
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
-import time
 
 import pytest
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QUrl, Qt
