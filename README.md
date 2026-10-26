@@ -25,7 +25,7 @@ SiegeSense AI is intended to help players understand their aim, movement, settin
 6. AI Coach
 7. Preferences & Privacy
 
-Overview includes direct workflow shortcuts. Aim Lab and Movement show manually tagged observations; AI Coach groups supported manual tags into evidence-linked prompts; recurring aim tags can start an editable one-variable experiment in Settings Lab. The settings snapshot records horizontal/vertical sensitivity, ADS values, mouse DPI, and MouseSensitivityMultiplierUnit as user-entered fields. Preferences & Privacy displays the local database path, opens its folder, and exports a SQLite backup. These remain manual-review workflows; real video playback and coaching are not yet validated.
+Overview includes direct workflow shortcuts. Aim Lab and Movement show manually tagged observations; AI Coach groups supported manual tags into evidence-linked prompts; recurring aim tags can start an editable one-variable experiment in Settings Lab. Settings Lab can read recognized values from a user-selected GameSettings.ini without editing it, and stores horizontal/vertical sensitivity, ADS values, mouse DPI, and hip-fire/ADS multipliers in local snapshots. Unmapped scope values remain for manual confirmation. Preferences & Privacy displays the local database path, opens its folder, and exports a SQLite backup. These remain manual-review workflows; real video playback and coaching are not yet validated.
 
 ## Technology
 
