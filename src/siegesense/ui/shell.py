@@ -7,7 +7,7 @@ from pathlib import Path
 from statistics import median
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSlider,
+    QScrollArea,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from siegesense.domain.models import ObservationKind
+from siegesense.services.coaching_service import build_coaching_insights
 from siegesense.services.export_service import (
     render_session_csv,
     render_session_json,
@@ -113,10 +115,12 @@ class MainWindow(QMainWindow):
         self,
         session_service: SessionService | None = None,
         settings_service: SettingsService | None = None,
+        database_path: str | Path | None = None,
     ) -> None:
         super().__init__()
         self.session_service = session_service
         self.settings_service = settings_service
+        self.database_path = Path(database_path) if database_path is not None else None
         self.setWindowTitle("SiegeSense AI")
         self.resize(1320, 850)
         self.setMinimumSize(960, 640)
@@ -234,6 +238,8 @@ class MainWindow(QMainWindow):
             self._build_annotation_lab(page_layout)
         elif name == "AI Coach":
             self._build_ai_coach(page_layout)
+        elif name == "Preferences & Privacy":
+            self._build_preferences(page_layout)
         elif name in {"Aim Lab", "Movement"}:
             self._build_category_review(page_layout, name)
         elif name == "Overview":
@@ -253,6 +259,42 @@ class MainWindow(QMainWindow):
                     self._overview_metric_values[key] = value_label
                 metrics.addWidget(card)
             page_layout.addLayout(metrics)
+
+            quick_actions_panel = QFrame()
+            quick_actions_panel.setObjectName("Panel")
+            quick_actions_layout = QVBoxLayout(quick_actions_panel)
+            quick_actions_layout.setContentsMargins(18, 16, 18, 18)
+            quick_actions_layout.setSpacing(10)
+            quick_actions_title = QLabel("Start here")
+            quick_actions_title.setObjectName("PanelTitle")
+            quick_actions_layout.addWidget(quick_actions_title)
+            quick_actions_hint = QLabel(
+                "Use one short review loop: attach a recording, mark what you observe, then test one change at a time."
+            )
+            quick_actions_hint.setObjectName("Muted")
+            quick_actions_hint.setWordWrap(True)
+            quick_actions_layout.addWidget(quick_actions_hint)
+            quick_actions_row = QHBoxLayout()
+            quick_actions_row.setSpacing(8)
+            self.overview_action_buttons: dict[str, QPushButton] = {}
+            for label, destination in (
+                ("Review a recording", "Session Review"),
+                ("Analyze a clip", "Clip Annotation"),
+                ("Test a setting", "Settings Lab"),
+                ("View coaching", "AI Coach"),
+            ):
+                action = QPushButton(label)
+                action.setObjectName(
+                    "PrimaryButton" if destination == "Session Review" else "SecondaryButton"
+                )
+                action.setCursor(Qt.CursorShape.PointingHandCursor)
+                action.clicked.connect(
+                    lambda checked=False, target=destination: self.show_page(target)
+                )
+                quick_actions_row.addWidget(action)
+                self.overview_action_buttons[destination] = action
+            quick_actions_layout.addLayout(quick_actions_row)
+            page_layout.addWidget(quick_actions_panel)
 
             body_row = QHBoxLayout()
             body_row.setSpacing(14)
@@ -316,7 +358,182 @@ class MainWindow(QMainWindow):
             page_layout.addWidget(empty, 1)
 
         page_layout.addStretch(1)
-        return page
+        # Keep every workspace usable on smaller Windows displays; long review and
+        # annotation pages must not silently clip their lower controls.
+        scroll_area = QScrollArea()
+        scroll_area.setObjectName("WorkspaceScrollArea")
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(page)
+        return scroll_area
+
+    def _build_preferences(self, page_layout: QVBoxLayout) -> None:
+        """Show where local data lives and expose simple privacy/data controls."""
+        page_layout.addWidget(
+            panel(
+                "Local data",
+                "Sessions, notes, settings snapshots, and experiments are stored in a local SQLite database. "
+                "Gameplay video files are referenced by path; they are not uploaded by this app.",
+            )
+        )
+
+        storage_panel = QFrame()
+        storage_panel.setObjectName("Panel")
+        storage_layout = QVBoxLayout(storage_panel)
+        storage_layout.setContentsMargins(18, 16, 18, 18)
+        storage_layout.setSpacing(10)
+        storage_heading = QLabel("Database location")
+        storage_heading.setObjectName("PanelTitle")
+        storage_layout.addWidget(storage_heading)
+        self.storage_path_label = QLabel("Checking local database location…")
+        self.storage_path_label.setWordWrap(True)
+        self.storage_path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        storage_layout.addWidget(self.storage_path_label)
+        self.storage_status_label = QLabel("")
+        self.storage_status_label.setObjectName("Muted")
+        self.storage_status_label.setWordWrap(True)
+        storage_layout.addWidget(self.storage_status_label)
+        actions = QHBoxLayout()
+        self.open_data_folder_button = QPushButton("Open data folder")
+        self.open_data_folder_button.setObjectName("SecondaryButton")
+        self.open_data_folder_button.clicked.connect(self._open_local_data_folder)
+        actions.addWidget(self.open_data_folder_button)
+        self.export_backup_button = QPushButton("Export database backup…")
+        self.export_backup_button.setObjectName("PrimaryButton")
+        self.export_backup_button.clicked.connect(self._export_database_backup)
+        actions.addWidget(self.export_backup_button)
+        refresh_button = QPushButton("Refresh")
+        refresh_button.setObjectName("SecondaryButton")
+        refresh_button.clicked.connect(self._refresh_storage_info)
+        actions.addWidget(refresh_button)
+        actions.addStretch(1)
+        storage_layout.addLayout(actions)
+        page_layout.addWidget(storage_panel)
+
+        page_layout.addWidget(
+            panel(
+                "Privacy and fair play",
+                "The preview works from recordings you select and notes you create. It does not inject into Siege, "
+                "read protected game memory, automate mouse or keyboard input, or silently change game settings. "
+                "Reports are written only when you choose an export location. Keep recordings and exported reports "
+                "private if they reveal personal information.",
+            )
+        )
+        page_layout.addWidget(
+            panel(
+                "What is not available yet",
+                "Automatic reticle/opponent detection, live-match analysis, validated overshoot classification, "
+                "and proven sensitivity recommendations are not implemented yet. Coaching prompts are based on "
+                "explicit tags you add during review and should be treated as practice hypotheses.",
+            )
+        )
+        self._refresh_storage_info()
+
+    def _refresh_storage_info(self) -> None:
+        """Refresh the visible local storage path, size, and action availability."""
+        if not hasattr(self, "storage_path_label"):
+            return
+        path = self.database_path
+        if path is None:
+            self.storage_path_label.setText("Storage path was not supplied by the application.")
+            self.storage_status_label.setText(
+                "This window was opened without a persistent database path, as in some UI tests."
+            )
+            self.open_data_folder_button.setEnabled(False)
+            self.export_backup_button.setEnabled(False)
+            return
+        if str(path) == ":memory:":
+            self.storage_path_label.setText("In-memory database (temporary)")
+            self.storage_status_label.setText(
+                "This temporary database disappears when the application closes."
+            )
+            self.open_data_folder_button.setEnabled(False)
+            self.export_backup_button.setEnabled(False)
+            return
+
+        location = path.expanduser()
+        self.storage_path_label.setText(str(location))
+        self.open_data_folder_button.setEnabled(location.parent.is_dir())
+        self.export_backup_button.setEnabled(location.is_file())
+        if not location.is_file():
+            self.storage_status_label.setText(
+                "The database file has not been created at this location yet."
+            )
+            return
+        try:
+            size_kb = max(1, (location.stat().st_size + 1023) // 1024)
+            modified = location.stat().st_mtime
+            from datetime import datetime
+
+            modified_text = datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M")
+            self.storage_status_label.setText(
+                f"Existing local database · {size_kb:,} KB · modified {modified_text}"
+            )
+        except OSError as error:
+            self.storage_status_label.setText(f"Could not inspect the database file: {error}")
+
+    def _open_local_data_folder(self) -> None:
+        """Open the directory containing the local database in the platform file manager."""
+        path = self.database_path
+        if path is None or str(path) == ":memory:":
+            self.storage_status_label.setText("A persistent local data folder is not available.")
+            return
+        folder = path.expanduser().parent
+        if not folder.is_dir():
+            self.storage_status_label.setText(f"Data folder does not exist: {folder}")
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder.resolve()))):
+            self.storage_status_label.setText(
+                "Windows could not open the data folder. You can copy the path shown above into File Explorer."
+            )
+
+    def _export_database_backup(self) -> None:
+        """Create a consistent SQLite backup without copying a live database file."""
+        path = self.database_path
+        if path is None or str(path) == ":memory:":
+            QMessageBox.information(
+                self, "Backup unavailable", "A persistent local database is not available in this window."
+            )
+            return
+        source_path = path.expanduser().resolve()
+        if not source_path.is_file():
+            QMessageBox.information(self, "Database not found", "The local database file does not exist yet.")
+            return
+        target, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export local database backup",
+            str(source_path.with_name("siegesense-backup.sqlite3")),
+            "SQLite database (*.sqlite3 *.db)",
+        )
+        if not target:
+            return
+        target_path = Path(target).expanduser().resolve()
+        if not target_path.suffix:
+            target_path = target_path.with_suffix(".sqlite3")
+        if target_path == source_path:
+            QMessageBox.warning(
+                self, "Choose a different file", "The backup must not overwrite the active database."
+            )
+            return
+        source_connection: sqlite3.Connection | None = None
+        backup_connection: sqlite3.Connection | None = None
+        try:
+            source_connection = sqlite3.connect(str(source_path))
+            backup_connection = sqlite3.connect(str(target_path))
+            source_connection.backup(backup_connection)
+        except (OSError, sqlite3.Error) as error:
+            QMessageBox.warning(
+                self, "Backup failed", f"No backup was created successfully.\n\n{error}"
+            )
+            return
+        finally:
+            if backup_connection is not None:
+                backup_connection.close()
+            if source_connection is not None:
+                source_connection.close()
+        self.storage_status_label.setText(f"Local database backup exported to {target_path}")
 
     def _build_category_review(self, page_layout: QVBoxLayout, page_name: str) -> None:
         """Show evidence from manually tagged observations for a single category."""
@@ -391,38 +608,58 @@ class MainWindow(QMainWindow):
             )
 
     def _build_ai_coach(self, page_layout: QVBoxLayout) -> None:
-        """Build transparent, rules-based review prompts from saved manual notes."""
+        """Build a transparent review assistant from user-supplied evidence."""
         page_layout.addWidget(
             panel(
-                "Coaching status",
-                "This is an evidence-linked review assistant, not a trained AI model or automatic gameplay detector. "
-                "It only summarises the notes you have saved locally.",
+                "Evidence-linked coach preview",
+                "Suggestions are generated from explicit manual tags and saved review notes. This is not a trained "
+                "AI model or automatic gameplay detector; the app will not invent a diagnosis when the evidence is missing.",
             )
         )
         refresh = QPushButton("Refresh coaching summary")
+        refresh.setObjectName("PrimaryButton")
         refresh.clicked.connect(self._refresh_ai_coach)
         page_layout.addWidget(refresh, 0, Qt.AlignmentFlag.AlignLeft)
+
         self.coach_summary_panel = QFrame()
         self.coach_summary_panel.setObjectName("Panel")
         coach_layout = QVBoxLayout(self.coach_summary_panel)
         coach_layout.setContentsMargins(18, 16, 18, 18)
         coach_layout.setSpacing(10)
-        coach_layout.addWidget(QLabel("Review prompts"))
+
+        coach_layout.addWidget(QLabel("Review categories"))
         self.coach_prompt_list = QListWidget()
-        self.coach_prompt_list.setMinimumHeight(180)
+        self.coach_prompt_list.setMinimumHeight(100)
         coach_layout.addWidget(self.coach_prompt_list)
+
+        coach_layout.addWidget(QLabel("Tagged patterns to verify"))
+        self.coach_pattern_list = QListWidget()
+        self.coach_pattern_list.setMinimumHeight(125)
+        self.coach_pattern_list.currentItemChanged.connect(self._show_selected_coaching_insight)
+        coach_layout.addWidget(self.coach_pattern_list)
+        self.coach_pattern_detail = QLabel(
+            "Select a tagged pattern to see its evidence and one focused practice block."
+        )
+        self.coach_pattern_detail.setObjectName("Muted")
+        self.coach_pattern_detail.setWordWrap(True)
+        coach_layout.addWidget(self.coach_pattern_detail)
+
         coach_layout.addWidget(QLabel("Recent evidence"))
         self.coach_evidence_list = QListWidget()
-        self.coach_evidence_list.setMinimumHeight(180)
+        self.coach_evidence_list.setMinimumHeight(130)
         coach_layout.addWidget(self.coach_evidence_list)
         page_layout.addWidget(self.coach_summary_panel, 1)
+        self._coaching_insights_by_key = {}
         self._refresh_ai_coach()
 
     def _refresh_ai_coach(self) -> None:
+        """Regenerate cautious practice prompts and show the notes behind each one."""
         if not hasattr(self, "coach_prompt_list"):
             return
         self.coach_prompt_list.clear()
+        self.coach_pattern_list.clear()
         self.coach_evidence_list.clear()
+        self._coaching_insights_by_key = {}
         try:
             sessions = self.session_service.list_sessions() if self.session_service else []
             records = [
@@ -436,29 +673,62 @@ class MainWindow(QMainWindow):
             ]
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
             self.coach_prompt_list.addItem(f"Local review data is unavailable: {error}")
+            self.coach_pattern_list.addItem("Coaching patterns are unavailable until local data can be read.")
+            self.coach_evidence_list.addItem("No evidence could be loaded.")
+            self.coach_pattern_detail.setText("Resolve the storage error before using these prompts.")
             return
         if not records:
             self.coach_prompt_list.addItem(
                 "Start with one recorded match and add a few timestamped notes in Session Review."
             )
+            self.coach_pattern_list.addItem(
+                "No tagged patterns yet. Begin by tagging an observed moment in Session Review."
+            )
             self.coach_evidence_list.addItem("No real-session observations are available yet.")
+            self.coach_pattern_detail.setText(
+                "Suggested tags: overflick, underflick, target-switch, crosshair-placement, "
+                "correction, recoil, movement, positioning, decision. Only tag what you can actually see."
+            )
             return
 
         counts: dict[str, int] = {}
         for _session, observation in records:
             counts[observation.kind.value] = counts.get(observation.kind.value, 0) + 1
         prompts = {
-            "aim": "Aim: revisit the logged moments and separate initial placement, first-shot timing, and target-transition control before changing sensitivity.",
-            "movement": "Movement: replay the logged moments and check whether movement timing, exposure, or crosshair placement was the issue.",
-            "positioning": "Positioning: review available cover, escape options, and the angle you chose before the engagement.",
-            "decision": "Decision-making: note the information available at the time and compare it with the decision you made.",
-            "other": "Other: clarify the observation into one specific behaviour you can check in another review.",
+            "aim": "Aim: separate pre-aim placement, initial endpoint, correction, and shot timing before changing sensitivity.",
+            "movement": "Movement: review peeking, exposure, and path choice; do not confuse screen motion with mouse input.",
+            "positioning": "Positioning: check cover, escape options, and the angle selected before the engagement.",
+            "decision": "Decision-making: compare the choice with the information available at that moment, not only the outcome.",
+            "other": "Other: refine the note into one specific behaviour you can check in another review.",
         }
         for category, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
-            self.coach_prompt_list.addItem(f"{category.title()} · {count} note(s) — {prompts[category]}")
+            self.coach_prompt_list.addItem(
+                f"{category.title()} · {count} note(s) — {prompts[category]}"
+            )
         self.coach_prompt_list.addItem(
-            "These prompts are transparent rules based on note categories, not proof of a weakness or an automatic diagnosis."
+            "These are review priorities, not proof of a weakness or an automatic diagnosis."
         )
+
+        insights = build_coaching_insights(records)
+        if not insights:
+            self.coach_pattern_list.addItem(
+                "No explicit coaching tags yet. In Session Review, try: "
+                "overflick, underflick, target-switch, crosshair-placement, correction, recoil, movement."
+            )
+            self.coach_pattern_detail.setText(
+                "Scope tags such as acog and close-range remain useful context, but they do not create a coaching claim by themselves."
+            )
+        else:
+            self._coaching_insights_by_key = {insight.key: insight for insight in insights}
+            for insight in insights:
+                item = QListWidgetItem(
+                    f"{insight.title} · {insight.observation_count} tagged note(s) · "
+                    f"{insight.session_count} session(s) · {insight.evidence_level}"
+                )
+                item.setData(Qt.ItemDataRole.UserRole, insight.key)
+                self.coach_pattern_list.addItem(item)
+            self.coach_pattern_list.setCurrentRow(0)
+
         records.sort(key=lambda pair: (pair[0].started_at, pair[1].timestamp_ms), reverse=True)
         for session, observation in records[:10]:
             seconds = observation.timestamp_ms // 1000
@@ -467,6 +737,32 @@ class MainWindow(QMainWindow):
             self.coach_evidence_list.addItem(
                 f"{session.title} · {timestamp} · {observation.kind.value.title()} · {observation.text}{tags}"
             )
+
+    def _show_selected_coaching_insight(
+        self, item: QListWidgetItem | None, _previous: QListWidgetItem | None = None
+    ) -> None:
+        """Display the supporting notes and one next drill for the selected tagged pattern."""
+        if not hasattr(self, "coach_pattern_detail"):
+            return
+        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        insight = self._coaching_insights_by_key.get(key) if key else None
+        if insight is None:
+            return
+        evidence_lines: list[str] = []
+        for session, observation in insight.evidence[:3]:
+            seconds = observation.timestamp_ms // 1000
+            timestamp = f"{seconds // 60:02d}:{seconds % 60:02d}"
+            evidence_lines.append(
+                f"{session.title} at {timestamp}: {observation.text}"
+            )
+        evidence_text = "\n".join(evidence_lines)
+        self.coach_pattern_detail.setText(
+            f"{insight.evidence_level}\n{insight.summary}\n\n"
+            f"Next practice block\n{insight.drill}\n\n"
+            f"Source notes\n{evidence_text}\n\n"
+            "Do not change sensitivity based on this prompt alone. Compare similar situations and "
+            "record the result before deciding whether to run a settings experiment."
+        )
 
     def _refresh_overview(self) -> None:
         """Refresh overview counts and review focus from real local records only."""
@@ -625,7 +921,9 @@ class MainWindow(QMainWindow):
         timestamp_host.setLayout(timestamp_row)
         observation_form.addRow("Timestamp", timestamp_host)
         self.observation_tags_input = QLineEdit()
-        self.observation_tags_input.setPlaceholderText("Optional comma-separated tags, e.g. overshoot, acog, close-range")
+        self.observation_tags_input.setPlaceholderText(
+            "Coaching tags + context: overflick, underflick, target-switch, acog, close-range"
+        )
         self.observation_filter_input = QLineEdit()
         self.observation_filter_input.setPlaceholderText("Filter notes by text or tag…")
         self.observation_filter_input.textChanged.connect(self._refresh_observations)
@@ -2065,6 +2363,12 @@ class MainWindow(QMainWindow):
         """Select a page and keep the active navigation state in sync."""
         if name == "Clip Annotation":
             self._refresh_annotation_sessions()
+        elif name == "AI Coach":
+            self._refresh_ai_coach()
+        elif name == "Preferences & Privacy":
+            self._refresh_storage_info()
+        elif name == "Overview":
+            self._refresh_overview()
         index = [item[0] for item in NAV_ITEMS].index(name)
         self.page_stack.setCurrentIndex(index)
         self.breadcrumb.setText(f"Workspace  /  {name}")
