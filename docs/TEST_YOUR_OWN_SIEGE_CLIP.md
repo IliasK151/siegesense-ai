@@ -79,3 +79,10 @@ The preview never changes game configuration or mouse software settings. Legacy 
 Keep the recording private. Report the exact step that failed, the full error message, your Windows version, python --version from the active virtual environment, and whether the check_windows.ps1 script passes. Do not upload a recording or screenshots containing sensitive information unless you explicitly choose to share them.
 
 For a sampling or playback problem, also mention the file type (for example, MP4 or MKV), video resolution, nominal frame rate, whether a normal media player can play it, and whether other clips work. Avoid sharing the video itself unless necessary and explicitly intended.
+
+
+## Import the real settings before an experiment
+
+The Settings Lab **Import GameSettings.ini…** button reads a selected configuration file without changing it. The default Windows location is commonly `Documents\My Games\Rainbow Six - Siege\<profile-id>\GameSettings.ini`; Ubisoft documents this path in its [PC data-centre settings guide](https://www.ubisoft.com/en-us/help/rainbow-six-siege/purchases-and-rewards/article/changing-your-data-centre-manually-in-rainbow-six-siege-pc/000060594).
+
+The importer maps only explicit entries it can safely associate with the fields: horizontal/vertical sensitivity, `MouseSensitivityMultiplierUnit`, `ADSMouseMultiplierUnit`, global ADS sensitivity, and the exact 1x ADS key. It reports but does not guess other per-scope keys (for example, a `2x` key is not assumed to mean a `2.5x` UI value). DPI is not in `GameSettings.ini`, so verify it in your mouse software and enter it manually. Confirm all fields against your in-game settings before saving snapshots. The importer only reads; it never applies settings or writes to the game.
