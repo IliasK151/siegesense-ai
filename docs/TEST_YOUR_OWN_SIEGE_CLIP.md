@@ -60,11 +60,21 @@ Follow the annotation guide (ANNOTATION_GUIDE.md) for label definitions and poin
 
 ## 6. Export and check the results
 
-Use **Export local evaluation report…** to save a JSON report. The spatial report summarizes the manually marked target-minus-reticle offsets. **Analyze screen-space motion…** can export a separate JSON report of visible image-feature movement.
+Use **Export local evaluation report…** to save a JSON report. The spatial report summarizes manually marked target-minus-reticle offsets. For adjacent frames showing the same clearly identifiable opponent, enter the same short **Target / sequence ID** (for example, `target-a`) before saving each annotation. Leave the field blank when you cannot confidently track the same opponent. The aim-transition report counts offset sign changes only when the same manually assigned target ID is present on consecutive samples at the known sampling interval. **Analyze screen-space motion…** exports visible image-feature motion, which is not mouse input.
 
 The current reports are experimental/manual-analysis outputs. They are not automatic reticle detection, opponent detection, mouse-input measurement, validated overshoot detection, aim accuracy, hit probability, rank, or skill scores.
 
-## 7. What to send back when something fails
+## 7. Try the coaching-to-settings loop
+
+1. Open **Session Review**, create a real review session, and link a saved Clip Annotation to it or add timestamped observations directly.
+2. When recording a review note, use the **Add a coaching tag** dropdown for what is visible (for example, `overflick`, `underflick`, `crosshair-placement`, `movement`, or `positioning`). Do not tag a clip with a diagnosis you cannot support.
+3. Open **AI Coach**. Select a tagged pattern to read its evidence level, source notes, and one practice block.
+4. A single note should not enable a settings experiment. When an overflick, underflick, or correction tag appears in multiple sessions, the coach can offer **Prepare a controlled settings experiment**. It fills a draft only; it does not assert that your current sensitivity is wrong.
+5. Open **Settings Lab**. Confirm every displayed value against the actual game/mouse configuration before saving a baseline. The settings fields include horizontal/vertical sensitivity, ADS values, mouse DPI, and `MouseSensitivityMultiplierUnit`. Save a baseline snapshot, change exactly one game setting yourself, save a test snapshot, select the pair, and compare them. Keep scope, weapon, range, and drill as similar as practical. Record the observed result, including inconclusive results.
+
+The preview never changes game configuration or mouse software settings. Legacy snapshots saved before the DPI/multiplier fields were added may not be comparable with new full snapshots; create a fresh pair of baseline/test snapshots for experiments.
+
+## 8. What to send back when something fails
 
 Keep the recording private. Report the exact step that failed, the full error message, your Windows version, python --version from the active virtual environment, and whether the check_windows.ps1 script passes. Do not upload a recording or screenshots containing sensitive information unless you explicitly choose to share them.
 
