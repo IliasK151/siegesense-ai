@@ -191,3 +191,8 @@ This is additional review evidence, not automatic aim detection. Verification is
 ## Settings experiment context additions
 
 Settings Lab records mouse DPI and the active `MouseSensitivityMultiplierUnit` value alongside horizontal/vertical sensitivity and ADS multipliers. These are user-entered configuration context, not automatically detected from the mouse driver or game. Before saving a baseline, users must verify every field against their own active configuration; the app never applies changes.
+
+
+## Read-only game configuration import
+
+A user-selected `GameSettings.ini` importer reads the `[INPUT]` section without writing to the source file. It maps only explicit values for horizontal/vertical sensitivity, hip-fire/ADS multipliers, global ADS and the exact 1x ADS key. Other scope-specific entries are disclosed rather than guessed across differing UI labels. DPI remains user-entered. Service and UI tests are added; Windows execution is still unverified.
