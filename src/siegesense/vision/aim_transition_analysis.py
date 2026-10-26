@@ -52,6 +52,11 @@ def summarize_aim_transitions(
     of frame width or frame height, respectively. A sign change is only counted between
     same-track annotations whose timestamps differ by exactly one known sample interval.
     """
+    # Validate an explicit interval before opening the annotation dataset. This
+    # keeps argument validation deterministic even when dataset_path is missing.
+    if sampling_interval_ms is not None:
+        _validate_sampling_interval(sampling_interval_ms)
+
     dataset_file = Path(dataset_path).expanduser().resolve()
     dataset = load_dataset(dataset_file)
     interval = _resolve_sampling_interval(
@@ -237,19 +242,24 @@ def write_aim_transition_report(
     return output
 
 
+def _validate_sampling_interval(sampling_interval_ms: int) -> int:
+    """Validate and return an explicitly supplied sampling interval."""
+    if (
+        isinstance(sampling_interval_ms, bool)
+        or not isinstance(sampling_interval_ms, int)
+        or sampling_interval_ms <= 0
+    ):
+        raise ValueError("Sampling interval must be a positive integer number of milliseconds")
+    return sampling_interval_ms
+
+
 def _resolve_sampling_interval(
     manifest_path: str,
     *,
     sampling_interval_ms: int | None,
 ) -> int | None:
     if sampling_interval_ms is not None:
-        if (
-            isinstance(sampling_interval_ms, bool)
-            or not isinstance(sampling_interval_ms, int)
-            or sampling_interval_ms <= 0
-        ):
-            raise ValueError("Sampling interval must be a positive integer number of milliseconds")
-        return sampling_interval_ms
+        return _validate_sampling_interval(sampling_interval_ms)
 
     try:
         manifest = json.loads(
