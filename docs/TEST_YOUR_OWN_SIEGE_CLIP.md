@@ -4,15 +4,15 @@ This preview reviews recordings saved to disk. It does not attach to live gamepl
 
 ## 1. Download the current build
 
-While signed in to the private GitHub repository, open:
+Open the public feature branch here:
 
 https://github.com/IliasK151/siegesense-ai/tree/feat/usable-coach-workflow
 
-Choose **Code → Download ZIP**, then extract it into a **new folder** such as \`C:\Dev\siegesense-ai-coach\`. Do not reuse the older extracted folder; it will not magically update. Keep recordings, sampled frames, annotations and reports outside Git.
+Choose **Code → Download ZIP**, then extract it into a **new folder** such as C:\Dev\siegesense-ai-coach. Do not reuse the older extracted folder; it will not magically update. Keep recordings, sampled frames, annotations and reports outside Git.
 
 ## 2. Run setup and checks
 
-You already installed Python 3.12. Open the new extracted folder and double-click \`CHECK_SIEGESENSE.bat\`. It creates no game changes; it runs the local test/lint check if the app environment is present. If it says the environment is missing, double-click \`START_SIEGESENSE.bat\` first, allow it to install project dependencies with your internet connection, close the app after it opens, then run \`CHECK_SIEGESENSE.bat\`.
+Install Python 3.12 for Windows from the official [Python downloads page](https://www.python.org/downloads/windows/) if it is not already installed, and include the Python Launcher. From the extracted folder, double-click START_SIEGESENSE.bat first. On first launch it creates a project-local environment and installs app, developer, and vision dependencies; this requires an internet connection. When the app opens, confirm it starts, then close it and double-click CHECK_SIEGESENSE.bat to run the local test suite and Ruff lint checks.
 
 If either file exits with an error, copy the entire terminal output. Do not assume a startup alone means tests or video playback passed.
 
