@@ -196,3 +196,8 @@ Settings Lab records mouse DPI and the active `MouseSensitivityMultiplierUnit` v
 ## Read-only game configuration import
 
 A user-selected `GameSettings.ini` importer reads the `[INPUT]` section without writing to the source file. It maps only explicit values for horizontal/vertical sensitivity, hip-fire/ADS multipliers, global ADS and the exact 1x ADS key. Other scope-specific entries are disclosed rather than guessed across differing UI labels. DPI remains user-entered. Service and UI tests are added; Windows execution is still unverified.
+
+
+## Current pre-run CI status — 2026-10-26
+
+Latest observed check for the current branch: [run 40295651963](https://github.com/IliasK151/siegesense-ai/actions/runs/40295651963). Its Python 3.10/3.11/3.12 jobs failed with `runner_id: 0`, empty runner names, and zero executed steps. This still does not indicate whether tests or lint pass. The current draft PR is [#16](https://github.com/IliasK151/siegesense-ai/pull/16); keep it in draft until local Windows checks pass and the hosted-runner issue is resolved.
