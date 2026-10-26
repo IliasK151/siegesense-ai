@@ -264,7 +264,7 @@ def test_dropping_video_automatically_samples_and_opens_review(
         assert Path(sessions[0].media_path).resolve() == source.resolve()
         assert window.review_session_combo.currentData() == sessions[0].id
         assert window.review_sampled_frames_button.isEnabled()
-        assert window.review_media_player.source().toLocalFile() == str(source.resolve())
+        assert Path(window.review_media_player.source().toLocalFile()).resolve() == source.resolve()
 
         window._open_sampled_frame_review()
         assert "Clip Annotation" in window.breadcrumb.text()
