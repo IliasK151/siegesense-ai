@@ -129,7 +129,7 @@ def test_recurring_aim_pattern_prepares_a_one_variable_settings_experiment(app: 
         )
         assert window.experiment_variable_input.text() == "2.5x ADS sensitivity"
         assert "test hypothesis, not" in window.experiment_hypothesis_input.text()
-        assert "Save your current settings as the baseline" in window.settings_status.text()
+        assert "Verify the displayed fields against your actual in-game settings" in window.settings_status.text()
     finally:
         window.close()
         database.close()
