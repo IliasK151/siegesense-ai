@@ -50,10 +50,10 @@ The items below describe work present on the current working branch as recorded 
 
 ### Documentation and automated checks
 - README, annotation guide, analysis validation plan, and roadmap describe the current limitations.
-- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) passed on Python 3.10, 3.11, and 3.12. Each job reported 161 passed and 2 skipped; `ruff check .` passed in all three jobs. The two skips are optional OpenCV tests because `cv2` is not installed in CI.
+- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) passed on Python 3.10, 3.11, and 3.12. Each job reported 163 passed and 2 skipped; `ruff check .` passed in all three jobs. The two skips are optional OpenCV tests because `cv2` is not installed in CI.
 - A missing `pytest` import was found in the motion UI test and patched; subsequent work added manual coordinate marking, spatial-offset reports, and label-transition summaries.
 - Local Windows test kit added: `scripts/setup_windows.ps1`, `scripts/run_windows.ps1`, `scripts/check_windows.ps1`, and `scripts/package_windows.ps1`; user guide: [`docs/TEST_YOUR_OWN_SIEGE_CLIP.md`](TEST_YOUR_OWN_SIEGE_CLIP.md). These scripts have been committed but have not been executed on a real Windows environment.
-- **Latest Quality CI is green:** [run 40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) executed successfully on Windows for Python 3.10, 3.11, and 3.12. Each environment reported 161 passed and 2 skipped; Ruff passed in all jobs. The skips are the optional optical-flow tests because OpenCV is not installed in CI. This verifies tests and lint for that commit only; it does not validate packaged builds or the full workflow with real recordings. The repository is now public to enable hosted runners, so review the current tree and Git history for secrets and personal/private data.
+- **Latest Quality CI is green:** [run 40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) executed successfully on Windows for Python 3.10, 3.11, and 3.12. Each environment reported 163 passed and 2 skipped; Ruff passed in all jobs. The skips are the optional optical-flow tests because OpenCV is not installed in CI. This verifies tests and lint for that commit only; it does not validate packaged builds or the full workflow with real recordings. The repository is now public to enable hosted runners, so review the current tree and Git history for secrets and personal/private data.
 
 ## 2. Not ready yet — release blockers
 
@@ -149,7 +149,7 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 - Current branch: `feat/usable-coach-workflow`
 - Current draft review: [PR #16](https://github.com/IliasK151/siegesense-ai/pull/16), stacked on [PR #14](https://github.com/IliasK151/siegesense-ai/pull/14). Neither has been merged.
 - Latest verified code commit: `b3d0039f87aafc21d28fecf7427561a78568d803`
-- Latest Quality run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) — green across Python 3.10/3.11/3.12; each job reports 161 passed, 2 skipped, and Ruff passed.
+- Latest Quality run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) — green across Python 3.10/3.11/3.12; each job reports 163 passed, 2 skipped, and Ruff passed.
 - Next task: **run clean-install, package, and real-media smoke tests on Windows**, including migration from an existing v1 database and optional OpenCV dependency behavior.
 - The Windows scripts and user test guide are committed but have not yet been run on the user's Windows PC. Record concrete output from setup/check/package and fix any issue found. Keep PR #16 in draft until baseline review and smoke tests are complete.
 - Do not merge PRs unless the user explicitly asks.
@@ -161,6 +161,9 @@ Start by reading this file and the current branch/PR state. Do not assume the pr
 Branch: `feat/usable-coach-workflow` (stacked on `feat/annotated-sequence-metrics`; no merge performed).
 
 Changes implemented in code:
+- Added a prominent drag-and-drop video zone on Overview and Clip Annotation, with a browse fallback for users who prefer choosing a file.
+- Dropped videos are sampled asynchronously at a lighter 500 ms default interval into a new non-overwriting sibling review folder; the UI remains responsive and loads the sampled frames automatically.
+- The app creates or reuses a local Session Review record for the video, opens its local playback player, and exposes a single button to move into the sampled-frame review.
 - Added scroll containers around each workspace so lower controls in long pages remain reachable at smaller window sizes.
 - Added Overview shortcuts for Session Review, Clip Annotation, Settings Lab, and AI Coach.
 - Added a Preferences & Privacy workspace that displays the database location and file status, opens the local data folder, and exports a consistent SQLite backup without copying a live database file directly.
@@ -170,7 +173,7 @@ Changes implemented in code:
 
 Verification caveat:
 - These edits are committed to the feature branch but have not yet been run on the user's Windows PC.
-- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) is green: 161 passed and 2 skipped in each Python version, with Ruff passing. The app has not yet been smoke-tested on the user's Windows PC.
+- Latest Quality CI run [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942) is green: 163 passed and 2 skipped in each Python version, with Ruff passing. The app has not yet been smoke-tested on the user's Windows PC.
 - This does not complete the overall product. Automatic reticle/opponent detection, robust temporal event analysis, validated settings recommendations, and real-media Windows validation remain release blockers.
 
 
@@ -198,6 +201,6 @@ A user-selected `GameSettings.ini` importer reads the `[INPUT]` section without 
 
 ## Current CI and verification status — 2026-10-26
 
-Latest Quality CI run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942). Python 3.10, 3.11, and 3.12 jobs all passed; each reported 161 passed, 2 skipped, and successful Ruff checks. Two optional tests skipped because OpenCV is not installed in the CI environment. Hosted runner initialization is now working for this workflow.
+Latest Quality CI run: [40299057942](https://github.com/IliasK151/siegesense-ai/actions/runs/40299057942). Python 3.10, 3.11, and 3.12 jobs all passed; each reported 163 passed, 2 skipped, and successful Ruff checks. Two optional tests skipped because OpenCV is not installed in the CI environment. Hosted runner initialization is now working for this workflow.
 
 Still outstanding: run the setup, check, and package scripts on a clean Windows machine; install or intentionally document optional OpenCV behavior; verify real video/frame playback, database migration, and end-to-end persistence; and audit the public repository's full Git history for secrets or private data. The current draft PR remains [#16](https://github.com/IliasK151/siegesense-ai/pull/16) and must not be merged until these checks are reviewed.
