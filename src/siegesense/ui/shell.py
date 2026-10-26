@@ -1610,7 +1610,7 @@ class MainWindow(QMainWindow):
         worker = VideoSamplingWorker(str(source), str(output), interval)
         worker.succeeded.connect(self._on_video_review_sampled)
         worker.failed.connect(self._on_video_review_failed)
-        worker.finished.connect(lambda current=worker: self._video_review_worker_finished(current))
+        worker.finished.connect(self._video_review_worker_finished)
         self._sampling_worker = worker
         worker.start()
 
@@ -1639,11 +1639,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "overview_review_status"):
             self.overview_review_status.setText(message)
 
-    def _video_review_worker_finished(self, worker: VideoSamplingWorker) -> None:
-        if self._sampling_worker is worker:
+    def _video_review_worker_finished(self) -> None:
+        worker = self._sampling_worker
+        if worker is not None:
             self._sampling_worker = None
+            worker.deleteLater()
         self._set_video_review_busy(False)
-        worker.deleteLater()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt event name
         worker = self._sampling_worker
