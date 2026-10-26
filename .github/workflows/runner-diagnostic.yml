@@ -1,0 +1,33 @@
+name: Runner provisioning diagnostic
+
+on:
+  push:
+    branches:
+      - "diagnostics/actions-runner-provisioning-2026-10-26"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-runner-probe:
+    name: Ubuntu hosted runner probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm runner starts
+        shell: bash
+        run: |
+          echo "RUNNER_PROBE_OK: ubuntu-latest"
+          echo "Commit: $GITHUB_SHA"
+
+  windows-runner-probe:
+    name: Windows hosted runner probe
+    runs-on: windows-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm runner starts
+        shell: pwsh
+        run: |
+          Write-Output "RUNNER_PROBE_OK: windows-latest"
+          Write-Output "Commit: $env:GITHUB_SHA"
