@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from statistics import median
 
-from PySide6.QtCore import QThread, Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
