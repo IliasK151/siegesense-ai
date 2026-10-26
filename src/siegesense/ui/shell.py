@@ -1068,6 +1068,11 @@ class MainWindow(QMainWindow):
         self.review_media_status.setObjectName("Muted")
         self.review_media_status.setWordWrap(True)
         media_layout.addWidget(self.review_media_status)
+        self.review_sampled_frames_button = QPushButton("Open sampled-frame review")
+        self.review_sampled_frames_button.setObjectName("SecondaryButton")
+        self.review_sampled_frames_button.setEnabled(False)
+        self.review_sampled_frames_button.clicked.connect(self._open_sampled_frame_review)
+        media_layout.addWidget(self.review_sampled_frames_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.review_media_player.positionChanged.connect(self._update_media_position)
         self.review_media_player.durationChanged.connect(self._update_media_duration)
         self.review_media_player.playbackStateChanged.connect(self._update_play_button)
@@ -1614,20 +1619,77 @@ class MainWindow(QMainWindow):
         self._sampling_worker = worker
         worker.start()
 
+    def _create_or_select_video_session(self, source: Path, duration_ms: int) -> str:
+        """Create one local session for a recording, or reuse its existing session."""
+        if self.session_service is None:
+            raise RuntimeError("Session storage is not configured")
+        source_path = str(source.expanduser().resolve())
+        sessions = self.session_service.list_sessions()
+        for session in sessions:
+            if not session.media_path:
+                continue
+            try:
+                if Path(session.media_path).expanduser().resolve() == Path(source_path):
+                    return session.id
+            except (OSError, RuntimeError):
+                continue
+
+        base_title = f"Review — {source.stem}"
+        title = base_title
+        suffix = 2
+        used_titles = {session.title.casefold() for session in sessions}
+        while title.casefold() in used_titles:
+            title = f"{base_title} ({suffix})"
+            suffix += 1
+        session = self.session_service.create_session(
+            title,
+            duration_ms=max(1, int(duration_ms)),
+            media_path=source_path,
+        )
+        return session.id
+
     def _on_video_review_sampled(self, report, output_dir: str) -> None:
         manifest_path = Path(output_dir) / "sampling_manifest.json"
         self.annotation_manifest_input.setText(str(manifest_path))
         self._load_annotation_manifest()
         if self._annotation_store is None:
             return
-        self.show_page("Clip Annotation")
+        self.review_sampled_frames_button.setEnabled(True)
+        source = Path(self.annotation_video_input.text()).expanduser().resolve()
+        try:
+            session_id = self._create_or_select_video_session(source, report.duration_ms)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+            message = (
+                f"Frames are ready, but the video session could not be saved: {error}. "
+                "You can still review the sampled frames."
+            )
+            self.annotation_status.setText(message)
+            if hasattr(self, "overview_review_status"):
+                self.overview_review_status.setText(message)
+            self.show_page("Clip Annotation")
+            return
+
+        self._refresh_review_sessions(select_id=session_id)
+        self.show_page("Session Review")
         message = (
-            f"Review ready — {len(report.frames)} frames loaded. Start with the selected frame, "
-            "then use Next to move through the recording. Labels are manual; no video was uploaded."
+            f"Review ready — {len(report.frames)} sampled frames loaded and the local video session is saved. "
+            "Press Play to watch the recording, or open the sampled-frame review below."
         )
         self.annotation_status.setText(message)
+        self.review_status.setText(f"Recording session ready: {source.name}.")
+        self.review_media_status.setText(
+            f"Loaded local recording: {source.name}. Press Play when you are ready."
+        )
+        self.review_sampled_frames_button.setEnabled(True)
         if hasattr(self, "overview_review_status"):
             self.overview_review_status.setText(message)
+
+    def _open_sampled_frame_review(self) -> None:
+        """Return to the latest automatically loaded sampled-frame review."""
+        if self._annotation_store is None or self._annotation_manifest_path is None:
+            self.review_media_status.setText("Drop a video on Overview to prepare a sampled-frame review first.")
+            return
+        self.show_page("Clip Annotation")
         self.annotation_frame_preview.setFocus()
 
     def _on_video_review_failed(self, error: str) -> None:
