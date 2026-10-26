@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from statistics import median
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QThread, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -65,6 +66,100 @@ NAV_ITEMS = [
     ("AI Coach", "✳", "Evidence-linked coaching, when available"),
     ("Preferences & Privacy", "☷", "Capture, data, and application preferences"),
 ]
+
+
+SUPPORTED_VIDEO_SUFFIXES = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"})
+
+
+class VideoDropZone(QFrame):
+    """Large, simple drop target for starting a local recording review."""
+
+    video_dropped = Signal(str)
+    browse_requested = Signal()
+
+    def __init__(self, prompt: str = "Drop a gameplay video here", parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("VideoDropZone")
+        self.setAcceptDrops(True)
+        self.setMinimumHeight(148)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(8)
+        title = QLabel(prompt)
+        title.setObjectName("PanelTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle = QLabel("MP4, MKV, MOV, AVI or WEBM · video stays on this PC")
+        subtitle.setObjectName("Muted")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
+        button = QPushButton("Choose a video")
+        button.setObjectName("PrimaryButton")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(self.browse_requested.emit)
+        layout.addStretch(1)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch(1)
+
+    @staticmethod
+    def _first_local_video(event) -> str | None:
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            return None
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            candidate = Path(url.toLocalFile())
+            if candidate.suffix.lower() in SUPPORTED_VIDEO_SUFFIXES:
+                return str(candidate)
+        return None
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        if self._first_local_video(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        if self._first_local_video(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        path = self._first_local_video(event)
+        if path:
+            self.video_dropped.emit(path)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+
+class VideoSamplingWorker(QThread):
+    """Sample a dropped recording in the background so the UI remains responsive."""
+
+    succeeded = Signal(object, str)
+    failed = Signal(str)
+
+    def __init__(self, source: str, output_dir: str, interval_ms: int) -> None:
+        super().__init__()
+        self.source = source
+        self.output_dir = output_dir
+        self.interval_ms = interval_ms
+
+    def run(self) -> None:
+        try:
+            report = sample_video_frames(
+                self.source,
+                self.output_dir,
+                interval_ms=self.interval_ms,
+            )
+        except Exception as error:
+            self.failed.emit(str(error))
+            return
+        self.succeeded.emit(report, self.output_dir)
 
 
 def _median_coherent_ratio(pairs: tuple) -> float:
@@ -132,6 +227,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(960, 640)
         self._collapsed = False
         self._nav_buttons: dict[str, QPushButton] = {}
+        self._sampling_worker: VideoSamplingWorker | None = None
 
         root = QWidget()
         root_layout = QHBoxLayout(root)
@@ -249,6 +345,26 @@ class MainWindow(QMainWindow):
         elif name in {"Aim Lab", "Movement"}:
             self._build_category_review(page_layout, name)
         elif name == "Overview":
+            overview_review_panel = QFrame()
+            overview_review_panel.setObjectName("Panel")
+            overview_review_layout = QVBoxLayout(overview_review_panel)
+            overview_review_layout.setContentsMargins(18, 16, 18, 18)
+            overview_review_layout.setSpacing(10)
+            overview_review_title = QLabel("Start a recording review")
+            overview_review_title.setObjectName("PanelTitle")
+            overview_review_layout.addWidget(overview_review_title)
+            self.overview_video_drop_zone = VideoDropZone()
+            self.overview_video_drop_zone.video_dropped.connect(self._start_video_review)
+            self.overview_video_drop_zone.browse_requested.connect(self._browse_annotation_video)
+            overview_review_layout.addWidget(self.overview_video_drop_zone)
+            self.overview_review_status = QLabel(
+                "Drop one video to create a review automatically. Frames and notes stay local."
+            )
+            self.overview_review_status.setObjectName("Muted")
+            self.overview_review_status.setWordWrap(True)
+            overview_review_layout.addWidget(self.overview_review_status)
+            page_layout.addWidget(overview_review_panel)
+
             metrics = QHBoxLayout()
             metrics.setSpacing(12)
             self._overview_metric_values: dict[str, QLabel] = {}
@@ -1036,42 +1152,75 @@ class MainWindow(QMainWindow):
         source_layout = QVBoxLayout(source_panel)
         source_layout.setContentsMargins(18, 16, 18, 18)
         source_layout.setSpacing(10)
-        source_layout.addWidget(QLabel("Sample a local recording"))
-        self.annotation_video_input = QLineEdit()
-        self.annotation_video_input.setPlaceholderText("Choose a gameplay recording")
-        video_row = QHBoxLayout()
-        video_row.addWidget(self.annotation_video_input, 1)
-        browse_video = QPushButton("Browse video…")
-        browse_video.clicked.connect(self._browse_annotation_video)
-        video_row.addWidget(browse_video)
-        source_layout.addLayout(video_row)
+        source_heading = QLabel("Start a recording review")
+        source_heading.setObjectName("PanelTitle")
+        source_layout.addWidget(source_heading)
+        self.annotation_drop_zone = VideoDropZone()
+        self.annotation_drop_zone.video_dropped.connect(self._start_video_review)
+        self.annotation_drop_zone.browse_requested.connect(self._browse_annotation_video)
+        source_layout.addWidget(self.annotation_drop_zone)
 
-        self.annotation_output_input = QLineEdit()
-        self.annotation_output_input.setPlaceholderText("Choose an empty output folder for sampled frames")
+        self.annotation_sampling_progress = QProgressBar()
+        self.annotation_sampling_progress.setRange(0, 0)
+        self.annotation_sampling_progress.setTextVisible(False)
+        self.annotation_sampling_progress.setMaximumHeight(8)
+        self.annotation_sampling_progress.hide()
+        source_layout.addWidget(self.annotation_sampling_progress)
+
+        self.annotation_status = QLabel(
+            "Drop one saved video. SiegeSense will sample frames and open the review automatically. "
+            "Frame labels remain manual."
+        )
+        self.annotation_status.setObjectName("Muted")
+        self.annotation_status.setWordWrap(True)
+        source_layout.addWidget(self.annotation_status)
+
+        self.annotation_advanced_toggle = QPushButton("Advanced options  ▸")
+        self.annotation_advanced_toggle.setObjectName("SecondaryButton")
+        self.annotation_advanced_toggle.setCheckable(True)
+        self.annotation_advanced_toggle.toggled.connect(self._toggle_annotation_advanced)
+        source_layout.addWidget(self.annotation_advanced_toggle, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self.annotation_advanced_panel = QFrame()
+        advanced_layout = QVBoxLayout(self.annotation_advanced_panel)
+        advanced_layout.setContentsMargins(0, 10, 0, 0)
+        advanced_layout.setSpacing(8)
+        video_row = QHBoxLayout()
+        self.annotation_video_input = QLineEdit()
+        self.annotation_video_input.setPlaceholderText("Selected video path")
+        video_row.addWidget(self.annotation_video_input, 1)
+        self.annotation_browse_video_button = QPushButton("Browse…")
+        self.annotation_browse_video_button.clicked.connect(self._browse_annotation_video)
+        video_row.addWidget(self.annotation_browse_video_button)
+        advanced_layout.addLayout(video_row)
+
         output_row = QHBoxLayout()
+        self.annotation_output_input = QLineEdit()
+        self.annotation_output_input.setPlaceholderText("Output folder (auto-selected by default)")
         output_row.addWidget(self.annotation_output_input, 1)
         browse_output = QPushButton("Output folder…")
         browse_output.clicked.connect(self._browse_annotation_output)
         output_row.addWidget(browse_output)
-        source_layout.addLayout(output_row)
+        advanced_layout.addLayout(output_row)
 
         sampling_row = QHBoxLayout()
         sampling_row.addWidget(QLabel("Sampling interval (ms)"))
         self.annotation_interval_spin = QSpinBox()
-        self.annotation_interval_spin.setRange(50, 10000)
-        self.annotation_interval_spin.setSingleStep(50)
-        self.annotation_interval_spin.setValue(100)
+        self.annotation_interval_spin.setRange(100, 10000)
+        self.annotation_interval_spin.setSingleStep(100)
+        self.annotation_interval_spin.setValue(500)
         self.annotation_interval_spin.setToolTip(
-            "Shorter intervals create more images. This is for manual review, not precise flick timing."
+            "Default is 500 ms (about 2 frames/second) to keep reviews lighter. "
+            "This is for manual review, not precise event timing."
         )
         sampling_row.addWidget(self.annotation_interval_spin)
-        sample_button = QPushButton("Sample frames")
-        sample_button.clicked.connect(self._sample_annotation_video)
-        sampling_row.addWidget(sample_button)
+        self.annotation_sample_button = QPushButton("Sample frames manually")
+        self.annotation_sample_button.clicked.connect(self._sample_annotation_video)
+        sampling_row.addWidget(self.annotation_sample_button)
         sampling_row.addStretch(1)
-        source_layout.addLayout(sampling_row)
+        advanced_layout.addLayout(sampling_row)
 
-        source_layout.addWidget(QLabel("Or open an existing sampled-video manifest"))
+        advanced_layout.addWidget(QLabel("Open an existing sampled-video review"))
         source_row = QHBoxLayout()
         self.annotation_manifest_input = QLineEdit()
         self.annotation_manifest_input.setPlaceholderText("Choose sampling_manifest.json")
@@ -1079,16 +1228,12 @@ class MainWindow(QMainWindow):
         browse_manifest = QPushButton("Browse…")
         browse_manifest.clicked.connect(self._browse_annotation_manifest)
         source_row.addWidget(browse_manifest)
-        source_layout.addLayout(source_row)
-        load_manifest_button = QPushButton("Load frames")
+        advanced_layout.addLayout(source_row)
+        load_manifest_button = QPushButton("Load existing review")
         load_manifest_button.clicked.connect(self._load_annotation_manifest)
-        source_layout.addWidget(load_manifest_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.annotation_status = QLabel(
-            "Annotations are manual labels stored locally. No video or frames are uploaded."
-        )
-        self.annotation_status.setObjectName("Muted")
-        self.annotation_status.setWordWrap(True)
-        source_layout.addWidget(self.annotation_status)
+        advanced_layout.addWidget(load_manifest_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.annotation_advanced_panel.setVisible(False)
+        source_layout.addWidget(self.annotation_advanced_panel)
         page_layout.addWidget(source_panel)
 
         review_row = QHBoxLayout()
@@ -1408,18 +1553,114 @@ class MainWindow(QMainWindow):
         self._refresh_review_sessions(select_id=session_id)
         self.show_page("Session Review")
 
+    def _toggle_annotation_advanced(self, expanded: bool) -> None:
+        self.annotation_advanced_panel.setVisible(expanded)
+        self.annotation_advanced_toggle.setText(
+            "Advanced options  ▾" if expanded else "Advanced options  ▸"
+        )
+
+    @staticmethod
+    def _new_review_output_folder(source: Path) -> Path:
+        base = source.parent / f"{source.stem}_siegesense_review"
+        candidate = base
+        suffix = 2
+        while candidate.exists():
+            candidate = source.parent / f"{source.stem}_siegesense_review_{suffix}"
+            suffix += 1
+        return candidate
+
+    def _set_video_review_busy(self, busy: bool) -> None:
+        if hasattr(self, "annotation_sampling_progress"):
+            self.annotation_sampling_progress.setVisible(busy)
+        for name in ("overview_video_drop_zone", "annotation_drop_zone"):
+            zone = getattr(self, name, None)
+            if zone is not None:
+                zone.setEnabled(not busy)
+        button = getattr(self, "annotation_sample_button", None)
+        if button is not None:
+            button.setEnabled(not busy)
+
+    def _start_video_review(self, source_path: str) -> None:
+        """Drop/browse flow: sample a local video asynchronously and open its frames."""
+        current_worker = self._sampling_worker
+        if current_worker is not None and current_worker.isRunning():
+            self.annotation_status.setText("A review is already being prepared. Please let it finish first.")
+            return
+
+        source = Path(source_path).expanduser().resolve()
+        if not source.is_file():
+            self.annotation_status.setText("That video file could not be found. Choose it again.")
+            return
+        if source.suffix.lower() not in SUPPORTED_VIDEO_SUFFIXES:
+            self.annotation_status.setText("Choose a video file such as MP4, MKV, MOV, AVI, or WEBM.")
+            return
+
+        output = self._new_review_output_folder(source)
+        self.annotation_video_input.setText(str(source))
+        self.annotation_output_input.setText(str(output))
+        interval = self.annotation_interval_spin.value()
+        message = (
+            f"Preparing review for {source.name}. Sampling at {interval} ms intervals; "
+            "large videos may take a little while. The app remains responsive."
+        )
+        self.annotation_status.setText(message)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+        self._set_video_review_busy(True)
+        worker = VideoSamplingWorker(str(source), str(output), interval)
+        worker.succeeded.connect(self._on_video_review_sampled)
+        worker.failed.connect(self._on_video_review_failed)
+        worker.finished.connect(lambda current=worker: self._video_review_worker_finished(current))
+        self._sampling_worker = worker
+        worker.start()
+
+    def _on_video_review_sampled(self, report, output_dir: str) -> None:
+        manifest_path = Path(output_dir) / "sampling_manifest.json"
+        self.annotation_manifest_input.setText(str(manifest_path))
+        self._load_annotation_manifest()
+        if self._annotation_store is None:
+            return
+        self.show_page("Clip Annotation")
+        message = (
+            f"Review ready — {len(report.frames)} frames loaded. Start with the selected frame, "
+            "then use Next to move through the recording. Labels are manual; no video was uploaded."
+        )
+        self.annotation_status.setText(message)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+        self.annotation_frame_preview.setFocus()
+
+    def _on_video_review_failed(self, error: str) -> None:
+        message = (
+            f"Could not prepare that review: {error} "
+            "Try another video file. The original recording was not changed."
+        )
+        self.annotation_status.setText(message)
+        if hasattr(self, "overview_review_status"):
+            self.overview_review_status.setText(message)
+
+    def _video_review_worker_finished(self, worker: VideoSamplingWorker) -> None:
+        if self._sampling_worker is worker:
+            self._sampling_worker = None
+        self._set_video_review_busy(False)
+        worker.deleteLater()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt event name
+        worker = self._sampling_worker
+        if worker is not None and worker.isRunning():
+            self.annotation_status.setText("Finishing the current local sampling task before closing…")
+            worker.wait()
+        super().closeEvent(event)
+
     def _browse_annotation_video(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select gameplay recording",
+            "Choose a video to review",
             "",
-            "Video files (*.mp4 *.mkv *.mov *.avi *.webm);;All files (*)",
+            "Video files (*.mp4 *.mkv *.mov *.avi *.webm *.m4v);;All files (*)",
         )
         if path:
-            self.annotation_video_input.setText(path)
-            if not self.annotation_output_input.text().strip():
-                source = Path(path)
-                self.annotation_output_input.setText(str(source.parent / f"{source.stem}_frames"))
+            self._start_video_review(path)
 
     def _browse_annotation_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Choose output folder")
