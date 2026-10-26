@@ -40,6 +40,7 @@ from siegesense.services.export_service import (
     render_session_json,
     render_session_summary,
 )
+from siegesense.services.game_settings_import_service import read_game_settings_ini
 from siegesense.services.session_service import SessionService
 from siegesense.services.settings_service import SettingsService
 from siegesense.ui.point_picker import PointPickerLabel
@@ -1931,6 +1932,7 @@ class MainWindow(QMainWindow):
             ("ads_2_5x", "2.5× ADS", 1, 200, 44),
             ("ads_3_5x", "3.5× ADS", 1, 200, 40),
             ("ads_8x", "8.0× ADS", 1, 200, 36),
+            ("ads_global", "Global ADS sensitivity (INI)", 1, 200, 50),
         ):
             control = QSpinBox()
             control.setRange(minimum, maximum)
@@ -1954,11 +1956,40 @@ class MainWindow(QMainWindow):
         multiplier_control.setSingleStep(0.001)
         multiplier_control.setValue(0.020000)
         multiplier_control.setToolTip(
-            "Enter the MouseSensitivityMultiplierUnit value from your active Siege configuration."
+            "Enter MouseSensitivityMultiplierUnit from the active Siege configuration."
         )
         self.settings_spinboxes["sensitivity_multiplier"] = multiplier_control
         form.addRow("Mouse sensitivity multiplier", multiplier_control)
+
+        ads_multiplier_control = QDoubleSpinBox()
+        ads_multiplier_control.setDecimals(6)
+        ads_multiplier_control.setRange(0.000001, 1.0)
+        ads_multiplier_control.setSingleStep(0.001)
+        ads_multiplier_control.setValue(0.020000)
+        ads_multiplier_control.setToolTip(
+            "Enter ADSMouseMultiplierUnit from the active Siege configuration."
+        )
+        self.settings_spinboxes["ads_sensitivity_multiplier"] = ads_multiplier_control
+        form.addRow("ADS sensitivity multiplier", ads_multiplier_control)
         layout.addLayout(form)
+
+        import_row = QHBoxLayout()
+        self.import_game_settings_button = QPushButton("Import GameSettings.ini…")
+        self.import_game_settings_button.setObjectName("SecondaryButton")
+        self.import_game_settings_button.setToolTip(
+            "Read recognized settings from one file you select. The importer never writes the game file."
+        )
+        self.import_game_settings_button.clicked.connect(self._import_game_settings)
+        import_row.addWidget(self.import_game_settings_button)
+        import_row.addStretch(1)
+        layout.addLayout(import_row)
+        self.settings_import_status = QLabel(
+            "Optional: import the active GameSettings.ini. Verify every field before saving a baseline."
+        )
+        self.settings_import_status.setObjectName("Muted")
+        self.settings_import_status.setWordWrap(True)
+        layout.addWidget(self.settings_import_status)
+
         save_button = QPushButton("Save settings snapshot")
         save_button.clicked.connect(self._save_settings_snapshot)
         layout.addWidget(save_button, 0, Qt.AlignmentFlag.AlignLeft)
@@ -2023,6 +2054,58 @@ class MainWindow(QMainWindow):
         experiment_layout.addWidget(self.settings_status)
         page_layout.addWidget(experiment_panel, 1)
         self._refresh_settings_data()
+
+    def _import_game_settings(self) -> None:
+        """Read a user-selected GameSettings.ini into only explicitly mapped controls."""
+        suggested_folder = (
+            Path.home() / "Documents" / "My Games" / "Rainbow Six - Siege"
+        )
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Import GameSettings.ini (read-only)",
+            str(suggested_folder),
+            "Game settings (GameSettings.ini);;INI files (*.ini);;All files (*)",
+        )
+        if not path:
+            return
+        try:
+            imported = read_game_settings_ini(path)
+        except (OSError, ValueError) as error:
+            self.settings_import_status.setText(
+                f"Import failed; no fields were changed. {error}"
+            )
+            return
+
+        for key, value in imported.values.items():
+            control = self.settings_spinboxes.get(key)
+            if control is not None:
+                control.setValue(value)
+
+        mapped_labels = [
+            f"{key.replace('_', ' ').title()}={value:g}"
+            for key, value in imported.values.items()
+        ]
+        missing_labels = [
+            key.replace("_", " ").title()
+            for key in self.settings_spinboxes
+            if key not in imported.values
+        ]
+        details = [
+            f"Read {Path(imported.source_path).name} without writing to it.",
+            "Imported: " + (", ".join(mapped_labels) if mapped_labels else "none"),
+            "Left unchanged for manual verification: " + (", ".join(missing_labels) if missing_labels else "none"),
+            "DPI is not stored in GameSettings.ini. Per-scope keys with names such as 2x/3x are not "
+            "guessed as 2.5x/3.5x/8x values; verify those values in the current in-game UI.",
+        ]
+        if imported.additional_ads_keys:
+            details.append(
+                "Additional ADS keys found but not auto-mapped: "
+                + ", ".join(imported.additional_ads_keys)
+            )
+        if imported.warnings:
+            details.extend(imported.warnings)
+        details.append("Review the populated fields, then save a baseline only after confirming them.")
+        self.settings_import_status.setText("\\n".join(details))
 
     def _save_settings_snapshot(self) -> None:
         if self.settings_service is None:
