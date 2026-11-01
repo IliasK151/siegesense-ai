@@ -107,6 +107,10 @@ class RoundTracker:
     def rounds(self) -> list[RoundSummary]:
         return [r.summary for r in self._rounds]
 
+    def finish(self, t: float) -> list[LiveEvent]:
+        """Live Mode is stopping: record a death that is still waiting for confirmation."""
+        return self._flush_death(t, force=True)
+
     def input(self, t: float, yaw_deg: float) -> None:
         """Cumulative horizontal aim angle (degrees) from the player's mouse."""
         if self._yaw_t and t < self._yaw_t[-1]:

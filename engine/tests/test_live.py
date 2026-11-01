@@ -218,3 +218,100 @@ async def test_ocr_ready_before_capture_starts(tmp_path, ocr):
         await ws.close()
     finally:
         await server.stop()
+
+
+class DieThenStop(threading.Thread):
+    """Alive, then killed (feed + health gone), and keeps showing that."""
+
+    def __init__(self, source):
+        super().__init__(daemon=True)
+        self.source = source
+        self.stop_flag = threading.Event()
+
+    def run(self):
+        t0 = time.perf_counter()
+        while not self.stop_flag.is_set():
+            e = time.perf_counter() - t0
+            if e < 1.0:
+                state = {"timer": int(90 - e), "score": (0, 0), "health": 100, "kills": []}
+            else:
+                state = {"timer": int(90 - e), "score": (0, 0), "health": None, "kills": DIE}
+            self.source.push(render(state, size=SIZE))
+            time.sleep(1 / 15)
+
+
+@pytest.mark.ocr
+async def test_death_recorded_when_clip_fails(tmp_path, ocr, monkeypatch):
+    frames = FakeFrameSource(SIZE)
+    server, port, store = await make(tmp_path, frames, ocr)
+
+    def broken(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(server.live._clips, "write", broken)
+    match = DieThenStop(frames)
+    try:
+        ws = await authed(port)
+        await request(ws, "start_live")
+        match.start()
+        async with asyncio.timeout(15):
+            while True:
+                msg = await recv_type_any(ws, {"live_event"})
+                if msg["payload"]["kind"] == "death":
+                    break
+        assert msg["payload"]["clip"] is None
+        res = await request(ws, "stop_live", id="s")
+        assert len(res["data"]["deaths"]) == 1
+        await ws.close()
+    finally:
+        match.stop_flag.set()
+        await server.stop()
+
+
+@pytest.mark.ocr
+async def test_pending_death_flushed_on_stop(tmp_path, ocr):
+    frames = FakeFrameSource(SIZE)
+    server, port, _ = await make(tmp_path, frames, ocr)
+    match = DieThenStop(frames)
+    try:
+        ws = await authed(port)
+        await request(ws, "start_live")
+        match.start()
+        await asyncio.sleep(1.6)  # killed ~0.5 s ago: not confirmed, no clip yet
+        res = await request(ws, "stop_live", id="s")
+        assert len(res["data"]["deaths"]) == 1
+        assert res["data"]["rounds"][0]["died"]
+        await ws.close()
+    finally:
+        match.stop_flag.set()
+        await server.stop()
+
+
+@pytest.mark.ocr
+async def test_events_saved_as_they_happen(tmp_path, ocr):
+    frames = FakeFrameSource(SIZE)
+    server, port, store = await make(tmp_path, frames, ocr)
+    match = DieThenStop(frames)
+    try:
+        ws = await authed(port)
+        await request(ws, "start_live")
+        match.start()
+        async with asyncio.timeout(15):
+            while True:
+                msg = await recv_type_any(ws, {"live_event"})
+                if msg["payload"]["kind"] == "death":
+                    break
+        await asyncio.sleep(0.2)
+        [m] = store.recent_matches()
+        assert m["ended_at"] is None  # match still running, but already saved
+        events = store.match_events(m["id"])
+        kinds = [e["kind"] for e in events]
+        assert "round_start" in kinds and "death" in kinds
+        death = next(e for e in events if e["kind"] == "death")
+        assert death["round"] == 1 and death["clip"] and 0 <= death["t"] < 30
+        await request(ws, "stop_live", id="s")
+        assert store.recent_matches()[0]["ended_at"] is not None
+        await ws.close()
+    finally:
+        match.stop_flag.set()
+        await server.stop()

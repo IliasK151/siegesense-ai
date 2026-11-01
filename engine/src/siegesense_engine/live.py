@@ -88,6 +88,8 @@ class LiveService:
         self._trace: deque[tuple[float, float]] = deque()
         self._low_since: float | None = None
         self.hud_low = False
+        self._match_id: int | None = None
+        self._t0 = 0.0
 
     @property
     def running(self) -> bool:
@@ -116,6 +118,10 @@ class LiveService:
         self._tracker = RoundTracker(profile.in_game_name)
         self._events = []
         self._started_at = datetime.now(UTC)
+        self._t0 = self._clock()
+        self._match_id = await asyncio.to_thread(
+            self._store.start_match, self._started_at.isoformat()
+        )
         self._yaw, self._yaw_scale = 0.0, conversion(profile).yaw
         self._trace.clear()
         self._low_since, self.hud_low = None, False
@@ -146,6 +152,13 @@ class LiveService:
         for unsub in self._unsubs:
             unsub()
         self._unsubs = []
+        if self._tracker is not None:
+            for event in self._tracker.finish(self._clock()):  # a death still being confirmed
+                out = LiveEventOut(**event.model_dump())
+                if out.kind == "death":
+                    self._spawn(self._clip_then_push(out, wait_for_after=False))
+                else:
+                    self._handle_event(out)
         if self._tasks:
             await asyncio.wait(self._tasks, timeout=CLIP_AFTER + 8)
         self._capture.release()
@@ -172,13 +185,14 @@ class LiveService:
             rounds=rounds,
             deaths=deaths,
         )
-        summary.id = await asyncio.to_thread(
-            self._store.add_match,
-            summary.started_at,
-            summary.ended_at,
-            summary.model_dump(mode="json"),
-            [e.model_dump(mode="json") for e in self._events],
-        )
+        summary.id = self._match_id
+        if self._match_id is not None:
+            await asyncio.to_thread(
+                self._store.finish_match,
+                self._match_id,
+                summary.ended_at,
+                summary.model_dump(mode="json"),
+            )
         return summary
 
     async def shutdown(self) -> None:
@@ -208,37 +222,64 @@ class LiveService:
         else:
             self._low_since, self.hud_low = None, False
         for event in self._tracker.hud(reading):
-            out = LiveEventOut(**event.model_dump())
-            if out.kind == "death":
-                self._spawn(self._clip_then_push(out))
-            else:
-                self._events.append(out)
-                self._spawn(self._push("live_event", out))
-            if out.kind == "round_end":
-                summary = next((r for r in self._tracker.rounds() if r.number == out.round), None)
-                if summary is not None:
-                    self._spawn(self._push("round_summary", summary))
+            self._handle_event(LiveEventOut(**event.model_dump()))
+
+    def _handle_event(self, out: LiveEventOut) -> None:
+        if self._tracker is None:
+            return
+        if out.kind == "death":
+            self._spawn(self._clip_then_push(out))
+        else:
+            self._record(out)
+            self._spawn(self._push("live_event", out))
+        if out.kind == "round_end":
+            summary = next((r for r in self._tracker.rounds() if r.number == out.round), None)
+            if summary is not None:
+                self._spawn(self._push("round_summary", summary))
+
+    def _record(self, event: LiveEventOut) -> None:
+        self._events.append(event)
+        if self._match_id is not None:
+            self._spawn(
+                asyncio.to_thread(
+                    self._store.add_event,
+                    self._match_id,
+                    round(event.t - self._t0, 2),
+                    event.kind,
+                    event.round,
+                    event.confidence,
+                    event.clip,
+                    event.data,
+                )
+            )
 
     def _spawn(self, coro) -> None:
         task = asyncio.get_running_loop().create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _clip_then_push(self, event: LiveEventOut) -> None:
-        wait = event.t + CLIP_AFTER + 0.2 - self._clock()
-        if wait > 0:
-            await asyncio.sleep(wait)
-        frames = self._capture.ring.window(event.t - CLIP_BEFORE, event.t + CLIP_AFTER)
-        trace = [
-            {"t": round(t - event.t, 3), "yaw": y}
-            for t, y in self._trace
-            if event.t - CLIP_BEFORE <= t <= event.t + CLIP_AFTER
-        ]
-        name = f"{self._started_at:%Y%m%d-%H%M%S}-r{event.round}-death"
-        path = await asyncio.to_thread(self._clips.write, frames, trace, name)
-        event.clip = path.name if path else None
-        self._events.append(event)
-        await self._push("live_event", event)
+    async def _clip_then_push(self, event: LiveEventOut, wait_for_after: bool = True) -> None:
+        """Saves the death clip, then records and pushes the death — always, even if the clip
+        fails (e.g. a full disk)."""
+        try:
+            wait = event.t + CLIP_AFTER + 0.2 - self._clock()
+            if wait > 0 and wait_for_after:
+                await asyncio.sleep(wait)
+            frames = self._capture.ring.window(event.t - CLIP_BEFORE, event.t + CLIP_AFTER)
+            trace = [
+                {"t": round(t - event.t, 3), "yaw": y}
+                for t, y in self._trace
+                if event.t - CLIP_BEFORE <= t <= event.t + CLIP_AFTER
+            ]
+            name = f"{self._started_at:%Y%m%d-%H%M%S}-r{event.round}-death"
+            path = await asyncio.to_thread(self._clips.write, frames, trace, name)
+            event.clip = path.name if path else None
+        except Exception:
+            log.exception("death clip failed; recording the death without it")
+            event.clip = None
+        finally:
+            self._record(event)
+            await self._push("live_event", event)
 
     # -- HUD check ---------------------------------------------------------------------
     async def _reader_for_check(self, payload: dict[str, Any] | None) -> HudReader:

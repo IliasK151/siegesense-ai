@@ -47,6 +47,11 @@ MIGRATIONS: list[str] = [
         data TEXT NOT NULL
     );
     """,
+    """
+    ALTER TABLE events ADD COLUMN round INTEGER;
+    ALTER TABLE events ADD COLUMN confidence TEXT;
+    ALTER TABLE events ADD COLUMN clip TEXT;
+    """,
 ]
 
 
@@ -133,7 +138,59 @@ class Store:
                 (limit,),
             ).fetchall()
         return [
-            {"id": r[0], "started_at": r[1], "ended_at": r[2], "summary": json.loads(r[3])}
+            {"id": r[0], "started_at": r[1], "ended_at": r[2] or None, "summary": json.loads(r[3])}
+            for r in rows
+        ]
+
+    # Live Mode saves as it goes, so a crash keeps everything up to that moment (spec §7).
+    def start_match(self, started_at: str) -> int:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO matches (started_at, ended_at, summary) VALUES (?, '', '{}')",
+                (started_at,),
+            )
+            return int(cur.lastrowid)
+
+    def add_event(
+        self,
+        match_id: int,
+        t: float,
+        kind: str,
+        round_: int | None,
+        confidence: str,
+        clip: str | None,
+        data: dict,
+    ) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO events (match_id, t, kind, round, confidence, clip, data) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (match_id, t, kind, round_, confidence, clip, json.dumps(data)),
+            )
+
+    def finish_match(self, match_id: int, ended_at: str, summary: dict) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE matches SET ended_at = ?, summary = ? WHERE id = ?",
+                (ended_at, json.dumps(summary), match_id),
+            )
+
+    def match_events(self, match_id: int) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT t, kind, round, confidence, clip, data FROM events "
+                "WHERE match_id = ? ORDER BY t, id",
+                (match_id,),
+            ).fetchall()
+        return [
+            {
+                "t": r[0],
+                "kind": r[1],
+                "round": r[2],
+                "confidence": r[3],
+                "clip": r[4],
+                "data": json.loads(r[5]),
+            }  # fmt: skip
             for r in rows
         ]
 
