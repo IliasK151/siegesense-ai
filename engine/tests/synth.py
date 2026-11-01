@@ -39,3 +39,20 @@ def flick(
 
 def end_time(samples: list[Sample]) -> float:
     return samples[-1][0]
+
+
+def to_counts(samples: list[Sample], deg_per_count: float):
+    """Convert degree samples into integer MouseMove events, carrying rounding remainders."""
+    from siegesense_engine.input.events import MouseMove
+
+    out = []
+    rx = ry = 0.0
+    for t, dx, dy in samples:
+        rx += dx / deg_per_count
+        ry += dy / deg_per_count
+        cx, cy = round(rx), round(ry)
+        rx -= cx
+        ry -= cy
+        if cx or cy:
+            out.append(MouseMove(t, cx, cy))
+    return out

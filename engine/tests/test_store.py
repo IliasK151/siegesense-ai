@@ -29,8 +29,57 @@ def test_store_overwrite(tmp_path):
     assert s.get_profile().dpi == 1600
 
 
-def test_schema_version_is_1(tmp_path):
+def test_schema_version_is_current(tmp_path):
     s = Store(tmp_path / "s.db")
-    assert s.schema_version() == 1
+    assert s.schema_version() == 2
     s.close()
-    assert Store(tmp_path / "s.db").schema_version() == 1
+    assert Store(tmp_path / "s.db").schema_version() == 2
+
+
+def _summary(started: str, score):
+    from siegesense_engine.warmup import WarmupMetrics, WarmupSummary
+
+    metrics = WarmupMetrics.empty("estimated").model_copy(update={"score": score})
+    return WarmupSummary(
+        id=None,
+        started_at=started,
+        duration_s=60.0,
+        metrics=metrics,
+        drill=None,
+        message="",
+        history=[],
+    )
+
+
+def test_store_warmup_history_order(tmp_path):
+    s = Store(tmp_path / "s.db")
+    for i in range(9):
+        s.add_warmup(_summary(f"2026-11-0{i + 1}T10:00:00+00:00", 50 + i))
+    hist = s.recent_warmups(7)
+    assert [h.score for h in hist] == [52, 53, 54, 55, 56, 57, 58]
+    assert hist[-1].started_at.startswith("2026-11-09")
+
+
+def test_migration_2_from_v1_db(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        """
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+        INSERT INTO meta VALUES ('schema_version', '1');
+        CREATE TABLE profiles (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL,
+                               updated_at TEXT NOT NULL);
+        """
+    )
+    db.execute(
+        "INSERT INTO profiles VALUES (1, ?, 'x')",
+        (make_profile().model_dump_json(),),
+    )
+    db.commit()
+    db.close()
+    s = Store(path)
+    assert s.schema_version() == 2
+    assert s.get_profile() == make_profile()
+    assert s.recent_warmups() == []

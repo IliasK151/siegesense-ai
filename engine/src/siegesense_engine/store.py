@@ -6,8 +6,12 @@ import sqlite3
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .profile import Profile
+
+if TYPE_CHECKING:
+    from .warmup import HistoryPoint, WarmupSummary
 
 # Ordered migrations; index + 1 is the schema version. Later steps append here.
 MIGRATIONS: list[str] = [
@@ -16,6 +20,15 @@ MIGRATIONS: list[str] = [
         id INTEGER PRIMARY KEY CHECK (id = 1),
         data TEXT NOT NULL,
         updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE warmup_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        duration_s REAL NOT NULL,
+        score INTEGER,
+        summary TEXT NOT NULL
     );
     """,
 ]
@@ -58,6 +71,30 @@ class Store:
                 "INSERT OR REPLACE INTO profiles (id, data, updated_at) VALUES (1, ?, ?)",
                 (profile.model_dump_json(), datetime.now(UTC).isoformat()),
             )
+
+    def add_warmup(self, summary: WarmupSummary) -> int:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO warmup_sessions (started_at, duration_s, score, summary) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    summary.started_at,
+                    summary.duration_s,
+                    summary.metrics.score,
+                    summary.model_dump_json(),
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def recent_warmups(self, limit: int = 7) -> list[HistoryPoint]:
+        from .warmup import HistoryPoint
+
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT started_at, score FROM warmup_sessions ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [HistoryPoint(started_at=r[0], score=r[1]) for r in reversed(rows)]
 
     def close(self) -> None:
         with self._lock:
