@@ -48,7 +48,11 @@ class ClipWriter:
         w, h = w - w % 2, h - h % 2
         with av.open(str(path), "w") as out:
             stream = None
-            for codec, opts in (("libx264", {"preset": "veryfast", "crf": "26"}), ("mpeg4", {})):
+            # Two encoder threads: clips are saved while the next round is coming up.
+            for codec, opts in (
+                ("libx264", {"preset": "veryfast", "crf": "26", "threads": "2"}),
+                ("mpeg4", {"threads": "2"}),
+            ):
                 try:
                     stream = out.add_stream(codec, rate=30, options=opts)
                     break

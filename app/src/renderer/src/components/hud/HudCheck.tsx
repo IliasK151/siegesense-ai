@@ -137,13 +137,16 @@ export function HudCheck({ regions: initial, side: initialSide, inGameName, onSa
           data-testid="hud-stage"
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-surface-2"
+          // The stage takes the screenshot's own shape (ultrawide, 16:10, 4:3 stretched…) so the
+          // normalised boxes sit on exactly the pixels the engine reads.
+          style={{ aspectRatio: result ? `${result.width} / ${result.height}` : "16 / 9" }}
+          className="relative w-full overflow-hidden rounded-xl border border-border bg-surface-2"
         >
           {result ? (
             <img
               src={`data:image/jpeg;base64,${result.image_jpeg_b64}`}
               alt="Screenshot of your game"
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              className="pointer-events-none absolute inset-0 h-full w-full"
               draggable={false}
             />
           ) : (

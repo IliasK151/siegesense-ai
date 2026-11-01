@@ -93,6 +93,15 @@ describe("HudCheck", () => {
     expect(onSave.mock.calls[0]![0]).toEqual(DEFAULT_HUD_REGIONS);
   });
 
+  it("stage keeps the screenshot's aspect ratio (ultrawide)", async () => {
+    const { engine } = setup();
+    engine.handlers.hud_check = () => ({ ...check(), width: 960, height: 405 });
+    await user.click(screen.getByRole("button", { name: "Take screenshot" }));
+    await screen.findByTestId("hud-readings");
+    expect(screen.getByTestId("hud-stage").style.aspectRatio).toBe("960 / 405");
+    expect(screen.getByAltText("Screenshot of your game").className).not.toContain("object-cover");
+  });
+
   it("score side toggle", async () => {
     const { onSave } = setup();
     await user.click(screen.getByRole("radio", { name: "Right" }));

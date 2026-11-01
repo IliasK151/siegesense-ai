@@ -65,3 +65,29 @@ def render(state: dict, size=(1920, 1080), regions: HudRegions | None = None) ->
         cv2.putText(img, victim, (vx, base), cv2.FONT_HERSHEY_SIMPLEX, scale, TEAM[vt], thick,
                     cv2.LINE_AA)  # fmt: skip
     return img
+
+
+def render_bright(state: dict, size=(1920, 1080), regions: HudRegions | None = None) -> np.ndarray:
+    """Like render(), but with a bright, textured sky behind the HUD and the dark translucent
+    boxes Siege draws behind kill-feed entries."""
+    regions = regions or HudRegions()
+    img = render({**state, "kills": []}, size, regions)
+    w, h = size
+    sky = np.linspace(200, 245, h // 2, dtype=np.uint8)[:, None, None]
+    img[: h // 2] = np.clip(
+        np.broadcast_to(sky, (h // 2, w, 3))
+        + np.random.default_rng(3).integers(-8, 8, (h // 2, w, 3)),
+        0,
+        255,
+    ).astype(np.uint8)
+    kx, ky, kw, _ = _px(regions.killfeed, size)
+    line_h = int(h * 0.045)
+    for i in range(len(state.get("kills", []))):
+        y0 = ky + i * line_h + 2
+        box = img[y0 : y0 + line_h - 4, kx + kw // 3 : kx + kw]
+        img[y0 : y0 + line_h - 4, kx + kw // 3 : kx + kw] = (box * 0.25).astype(np.uint8)
+    overlay = render({"kills": state.get("kills", [])}, size, regions)
+    feed = overlay[ky : ky + int(regions.killfeed.h * h), kx : kx + kw]
+    mask = feed.max(axis=2) > 60
+    img[ky : ky + feed.shape[0], kx : kx + kw][mask] = feed[mask]
+    return img

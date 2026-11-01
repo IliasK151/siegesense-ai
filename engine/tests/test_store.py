@@ -31,9 +31,9 @@ def test_store_overwrite(tmp_path):
 
 def test_schema_version_is_current(tmp_path):
     s = Store(tmp_path / "s.db")
-    assert s.schema_version() == 3
+    assert s.schema_version() == 4
     s.close()
-    assert Store(tmp_path / "s.db").schema_version() == 3
+    assert Store(tmp_path / "s.db").schema_version() == 4
 
 
 def _summary(started: str, score):
@@ -80,14 +80,14 @@ def test_migration_2_from_v1_db(tmp_path):
     db.commit()
     db.close()
     s = Store(path)
-    assert s.schema_version() == 3
+    assert s.schema_version() == 4
     assert s.get_profile() == make_profile()
     assert s.recent_warmups() == []
 
 
 def test_store_matches(tmp_path):
     s = Store(tmp_path / "s.db")
-    assert s.schema_version() == 3
+    assert s.schema_version() == 4
     mid = s.add_match("2026-11-01T20:00:00+00:00", "2026-11-01T20:30:00+00:00", {"rounds": []},
                       [{"t": 1.0, "kind": "death", "data": {}}])  # fmt: skip
     assert mid == 1

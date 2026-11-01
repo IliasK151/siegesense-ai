@@ -121,3 +121,61 @@ def test_hub_unavailable():
     with pytest.raises(CaptureUnavailable, match="Windows only"):
         hub.acquire(30)
     assert not hub.active and hub.error == "Screen capture works on Windows only"
+
+
+class CountingSource(FakeFrameSource):
+    def __init__(self):
+        super().__init__()
+        self.starts = 0
+        self.fps_changes = []
+
+    def start(self, fps):
+        self.starts += 1
+        super().start(fps)
+
+    def set_fps(self, fps):
+        self.fps_changes.append(fps)
+
+
+def test_guard_never_restarts_the_source():
+    src, ring = CountingSource(), FrameRing(width=160)
+    svc = CaptureService(src, ring, hud_hz=10, guard_window=0.3)
+    svc.subscribe(lambda f: time.sleep(0.3))  # slower than even the lowest HUD rate
+    with Pusher(src):
+        svc.start(30)
+        wait(lambda: svc.stats().fps_target < 30, timeout=4)
+        time.sleep(0.2)
+        svc.stop()
+    assert src.starts == 1
+    assert src.fps_changes and src.fps_changes[0] == 24
+
+
+def test_failed_fps_change_is_reported():
+    class Broken(CountingSource):
+        def set_fps(self, fps):
+            raise RuntimeError("DXGI device lost")
+
+    src, ring = Broken(), FrameRing(width=160)
+    svc = CaptureService(src, ring, hud_hz=10, guard_window=0.3)
+    svc.subscribe(lambda f: time.sleep(0.3))
+    with Pusher(src):
+        svc.start(30)
+        wait(lambda: svc.error is not None, timeout=4)
+        svc.stop()
+    assert "DXGI device lost" in svc.error
+
+
+def test_stats_safe_while_capturing():
+    src, ring = FakeFrameSource(), FrameRing(width=160)
+    svc = CaptureService(src, ring)
+    errors = []
+    with Pusher(src, hz=200):
+        svc.start(30)
+        end = time.monotonic() + 1.0
+        while time.monotonic() < end:
+            try:
+                svc.stats()
+            except RuntimeError as exc:
+                errors.append(exc)
+        svc.stop()
+    assert errors == []

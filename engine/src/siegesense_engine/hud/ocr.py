@@ -43,7 +43,14 @@ class RapidOcrEngine:
             from rapidocr import RapidOCR
 
             logging.getLogger("RapidOCR").setLevel(logging.ERROR)
-            self._engine = RapidOCR(params={"Global.log_level": "error"})
+            # Two threads at most: OCR must not compete with the game for CPU.
+            self._engine = RapidOCR(
+                params={
+                    "Global.log_level": "error",
+                    "EngineConfig.onnxruntime.intra_op_num_threads": 2,
+                    "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+                }
+            )
         return self._engine
 
     def warm_up(self) -> None:

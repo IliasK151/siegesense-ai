@@ -12,17 +12,17 @@ from typing import Literal
 
 import cv2
 import numpy as np
-from rapidfuzz import fuzz
 
+from .names import clean_name, looks_like_name, same_name
 from .ocr import OcrEngine, prep_text
 
 Team = Literal["blue", "orange", "unknown"]
-NAME_MATCH = 85
 DEDUPE_SECONDS = 10.0
 CHANGE_THRESHOLD = 2.0
 NAME_GAP_PX = 12
 MIN_LINE_PX = 8
 FALLBACK_EVERY = 2.0
+MIN_NAME_CONFIDENCE = 0.6
 
 
 @dataclass
@@ -44,11 +44,6 @@ def _coloured(hsv: np.ndarray) -> np.ndarray:
     return (hsv[..., 1] > 80) & (hsv[..., 2] > 80)
 
 
-def _text_mask(img: np.ndarray) -> np.ndarray:
-    hsv = _hsv(img)
-    return _coloured(hsv) | (hsv[..., 2] > 200)
-
-
 def _runs(active: np.ndarray, max_gap: int) -> list[tuple[int, int]]:
     """Index ranges where ``active`` is true, merging gaps of at most ``max_gap``."""
     runs: list[tuple[int, int]] = []
@@ -67,7 +62,8 @@ def _runs(active: np.ndarray, max_gap: int) -> list[tuple[int, int]]:
 
 
 def segment_lines(img: np.ndarray) -> list[tuple[int, int]]:
-    rows = _text_mask(img).sum(axis=1) >= 2
+    # Team-coloured name pixels only: white text and bright scenery would merge every row.
+    rows = _coloured(_hsv(img)).sum(axis=1) >= 2
     return [(a, b) for a, b in _runs(rows, 2) if b - a >= MIN_LINE_PX]
 
 
@@ -93,6 +89,10 @@ def team_of(img: np.ndarray) -> Team:
     return "unknown"
 
 
+def _plausible(text: str, confidence: float) -> bool:
+    return confidence >= MIN_NAME_CONFIDENCE and looks_like_name(text)
+
+
 class KillFeedReader:
     def __init__(self, ocr: OcrEngine, own_name: str) -> None:
         self._ocr = ocr
@@ -102,7 +102,7 @@ class KillFeedReader:
         self._last_fallback = -1e9
 
     def is_me(self, name: str) -> bool:
-        return fuzz.ratio(name.lower(), self._own) >= NAME_MATCH
+        return same_name(name, self._own)
 
     def reset_change_detection(self) -> None:
         self._last_crop = None
@@ -130,8 +130,9 @@ class KillFeedReader:
                 continue
             killer, kc, kt = self._name(line, *names[0])
             victim, vc, vt = self._name(line, *names[1])
-            if not killer or not victim:
+            if not _plausible(killer, kc) or not _plausible(victim, vc):
                 continue
+            killer, victim = clean_name(killer), clean_name(victim)
             entries.append(KillEntry(killer, victim, kt, vt, min(kc, vc), y0))
         return entries
 
@@ -151,6 +152,8 @@ class KillFeedReader:
             if len(parts) < 2:
                 continue
             (kt_, kc, kb), (vt_, vc, vb) = parts[0], parts[-1]
+            if not _plausible(kt_, kc) or not _plausible(vt_, vc):
+                continue
             k_img = img[kb[1] : kb[1] + kb[3], kb[0] : kb[0] + kb[2]]
             v_img = img[vb[1] : vb[1] + vb[3], vb[0] : vb[0] + vb[2]]
             entries.append(KillEntry(kt_, vt_, team_of(k_img), team_of(v_img), min(kc, vc), kb[1]))
@@ -159,10 +162,7 @@ class KillFeedReader:
     def _is_new(self, e: KillEntry, t: float) -> bool:
         self._recent = [r for r in self._recent if t - r[2] <= DEDUPE_SECONDS]
         for r in self._recent:
-            if (
-                fuzz.ratio(r[0], e.killer) >= NAME_MATCH
-                and fuzz.ratio(r[1], e.victim) >= NAME_MATCH
-            ):
+            if same_name(r[0], e.killer) and same_name(r[1], e.victim):
                 r[2] = t  # still on screen
                 return False
         self._recent.append([e.killer, e.victim, t])

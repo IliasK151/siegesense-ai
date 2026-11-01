@@ -8,13 +8,16 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import BaseModel
-from rapidfuzz import fuzz
 
+from .hud.names import same_name
 from .hud.reader import HudReading, KillEntryModel
 
 PREP_MAX = 45  # s; a round that starts at or under this is in the preparation phase
 JUMP_UP = 10  # s; timer jumping up by more than this means a new phase/round
-END_AFTER_NO_TIMER = 4.0  # s without a readable timer once action started
+# After a plant the timer is replaced by the defuser, so a missing timer alone only ends the
+# round after longer than any defuse countdown; normally the score change ends it.
+END_AFTER_NO_TIMER = 60.0
+CONFIRM_READS = 2  # a timer jump or score change must be read this many times in a row
 TRADE_WINDOW = 5.0  # s
 DEATH_MATCH_WINDOW = 3.0  # s between the kill feed and the health disappearing
 HEALTH_GONE_FOR = 1.0  # s
@@ -22,7 +25,6 @@ LOW_CONFIDENCE_AFTER = 4.0  # s without health confirmation → record as low co
 REPEEK_WINDOW = 3.0  # s after your kill
 REPEEK_AWAY = 10.0  # degrees
 REPEEK_BACK = 3.0  # degrees
-NAME_MATCH = 85
 
 
 class LiveEvent(BaseModel):
@@ -80,7 +82,7 @@ class _Round:
 
 
 def _same(a: str, b: str) -> bool:
-    return fuzz.ratio(a.lower(), b.lower()) >= NAME_MATCH
+    return same_name(a, b)
 
 
 class RoundTracker:
@@ -91,6 +93,8 @@ class RoundTracker:
         self._last_timer: int | None = None
         self._timer_gone_since: float | None = None
         self._scores: tuple[int, int] | None = None
+        self._pending_jump: tuple[int, int] | None = None  # (value, times seen)
+        self._pending_score: tuple[tuple[int, int], int] | None = None
         self._my_team: str | None = None
         self._pending_death: _PendingDeath | None = None
         self._health_gone_since: float | None = None
@@ -102,6 +106,10 @@ class RoundTracker:
     # -- public ------------------------------------------------------------------------
     def rounds(self) -> list[RoundSummary]:
         return [r.summary for r in self._rounds]
+
+    def finish(self, t: float) -> list[LiveEvent]:
+        """Live Mode is stopping: record a death that is still waiting for confirmation."""
+        return self._flush_death(t, force=True)
 
     def input(self, t: float, yaw_deg: float) -> None:
         """Cumulative horizontal aim angle (degrees) from the player's mouse."""
@@ -171,23 +179,47 @@ class RoundTracker:
                     events += self._end_round(r.t, None)
             return events
         self._timer_gone_since = None
-        last = self._last_timer
-        self._last_timer = r.timer
         if self._current is None:
+            self._last_timer = r.timer
+            self._pending_jump = None
             return self._start_round(r.t, r.timer)
+        last = self._last_timer
         if last is not None and r.timer > last + JUMP_UP:
+            # A jump up is a new phase/round, or a one-frame misread: wait for confirmation.
+            seen = self._pending_jump
+            count = seen[1] + 1 if seen and abs(seen[0] - r.timer) <= 2 else 1
+            self._pending_jump = (r.timer, count)
+            if count < CONFIRM_READS:
+                return events
+            self._pending_jump = None
+            self._last_timer = r.timer
             if self._current.phase == "prep":
                 return self._set_phase(r.t, "action")
+            if r.timer <= PREP_MAX:
+                return events  # e.g. the defuser countdown after a plant, not a new round
             return self._start_round(r.t, r.timer)
+        self._pending_jump = None
+        self._last_timer = r.timer
         return events
 
     def _track_score(self, r: HudReading) -> list[LiveEvent]:
         if r.score_mine is None or r.score_theirs is None:
             return []
         now = (r.score_mine, r.score_theirs)
-        before, self._scores = self._scores, now
-        if before is None or now == before:
+        before = self._scores
+        if before is None:
+            self._scores = now
             return []
+        if now == before:
+            self._pending_score = None
+            return []
+        seen = self._pending_score
+        count = seen[1] + 1 if seen and seen[0] == now else 1
+        self._pending_score = (now, count)
+        if count < CONFIRM_READS:
+            return []  # one read could be an OCR mistake
+        self._pending_score = None
+        self._scores = now
         if now[0] > before[0] and now[1] == before[1]:
             result: Literal["win", "loss"] | None = "win"
         elif now[1] > before[1] and now[0] == before[0]:
@@ -213,6 +245,8 @@ class RoundTracker:
             self._my_team = k.killer_team
         if k.victim_is_me and k.victim_team != "unknown":
             self._my_team = k.victim_team
+        if any(_same(p.entry.victim, k.victim) for p in rnd.feed):
+            return []  # a player can only die once per round (OCR flicker on the same entry)
         first = not rnd.feed
         rnd.feed.append(_Kill(t, k))
         s = rnd.summary
@@ -244,8 +278,9 @@ class RoundTracker:
         return events
 
     def _track_death(self, r: HudReading) -> list[LiveEvent]:
-        timer_running = r.timer is not None
-        if r.health is None and timer_running:
+        # While a round is open (the timer may be hidden after a plant), missing health counts.
+        round_open = self._current is not None
+        if r.health is None and round_open:
             self._health_gone_since = self._health_gone_since or r.t
         elif r.health is not None:
             self._health_gone_since = None
