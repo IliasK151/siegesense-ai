@@ -72,3 +72,41 @@ def test_find_game_settings(tmp_path):
 
 def test_find_game_settings_none(tmp_path):
     assert find_game_settings([tmp_path / "nothing"]) == []
+
+
+def test_inf_and_nan_go_to_missing(tmp_path):
+    f = tmp_path / "GameSettings.ini"
+    f.write_text("DefaultFOV=nan\nMouseYawSensitivity=inf\nResolutionWidth=1e400\n")
+    result = parse_game_settings(f)
+    assert result.values == {}
+    for field in ("fov", "yaw_sensitivity", "resolution_width"):
+        assert field in result.missing
+
+
+def test_onedrive_variants_found(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from siegesense_engine import gamesettings
+
+    (tmp_path / "Documents").mkdir()
+    (tmp_path / "OneDrive - Contoso" / "Documents").mkdir(parents=True)
+    (tmp_path / "OneDrive" / "Documents").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(gamesettings, "_known_documents_folder", lambda: None)
+    dirs = gamesettings.default_documents_dirs()
+    assert tmp_path / "Documents" in dirs
+    assert tmp_path / "OneDrive - Contoso" / "Documents" in dirs
+    assert tmp_path / "OneDrive" / "Documents" in dirs
+    assert len(dirs) == len(set(dirs))
+
+
+def test_known_folder_comes_first(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from siegesense_engine import gamesettings
+
+    redirected = tmp_path / "D" / "Docs"
+    redirected.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    monkeypatch.setattr(gamesettings, "_known_documents_folder", lambda: redirected)
+    assert gamesettings.default_documents_dirs()[0] == redirected

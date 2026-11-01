@@ -60,11 +60,22 @@ export class EngineSupervisor extends EventEmitter {
     });
   }
 
-  stop(): void {
+  /** Ask the engine to exit by closing its stdin; force-kill only if it hangs. */
+  stop(graceMs = 2000): void {
     this.stopping = true;
     this.connection = null;
-    this.child?.kill();
+    const child = this.child;
     this.child = null;
+    if (!child) return;
+    let exited = false;
+    child.once("exit", () => {
+      exited = true;
+    });
+    child.stdin?.end();
+    const timer = setTimeout(() => {
+      if (!exited) child.kill();
+    }, graceMs);
+    timer.unref?.();
   }
 
   private setState(state: EngineState): void {

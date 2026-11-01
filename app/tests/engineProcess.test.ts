@@ -13,6 +13,15 @@ class FakeChild extends EventEmitter {
   stderr = new PassThrough();
   stdin = new PassThrough();
   killed = false;
+  exitOnStdinEnd = true;
+  constructor() {
+    super();
+    this.stdin.on("finish", () => {
+      this.stdinEnded = true;
+      if (this.exitOnStdinEnd) queueMicrotask(() => this.emit("exit", 0, null));
+    });
+  }
+  stdinEnded = false;
   kill() {
     this.killed = true;
     queueMicrotask(() => this.emit("exit", null, "SIGTERM"));
@@ -137,4 +146,31 @@ describe("engineProcess", () => {
     await tick();
     expect(children).toHaveLength(1);
   });
+
+  it("stop ends stdin and waits for a clean exit", async () => {
+    const { spawnFn, children } = fakeSpawn();
+    const sup = new EngineSupervisor(cmd, { dataDir: "/d", spawnFn });
+    const started = sup.start();
+    children[0]!.ready(4000);
+    await started;
+    sup.stop(50);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(children[0]!.stdinEnded).toBe(true);
+    expect(children[0]!.killed).toBe(false);
+  });
+
+  it("stop kills after the grace period if the engine hangs", async () => {
+    const { spawnFn, children } = fakeSpawn();
+    const sup = new EngineSupervisor(cmd, { dataDir: "/d", spawnFn });
+    const started = sup.start();
+    children[0]!.exitOnStdinEnd = false;
+    children[0]!.ready(4000);
+    await started;
+    sup.stop(30);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(children[0]!.killed).toBe(false);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(children[0]!.killed).toBe(true);
+  });
 });
+

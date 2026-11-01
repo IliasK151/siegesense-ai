@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -69,7 +70,6 @@ class EngineServer:
         self._status_interval = status_interval
         self._board = StatusBoard(watcher, store.get_profile)
         self._clients: set[ServerConnection] = set()
-        self._last_status: str | None = None
         self._server: Server | None = None
         self._ticker: asyncio.Task | None = None
         self._handlers: dict[str, Handler] = {
@@ -114,7 +114,8 @@ class EngineServer:
             env = parse(await asyncio.wait_for(ws.recv(), HELLO_TIMEOUT))
         except (TimeoutError, ProtocolError, ConnectionClosed):
             env = None
-        if env is None or env.type != "hello" or env.payload.get("token") != self._token:
+        token = str(env.payload.get("token", "")) if env is not None else ""
+        if env is None or env.type != "hello" or not hmac.compare_digest(token, self._token):
             with contextlib.suppress(ConnectionClosed):
                 await ws.close(UNAUTHORIZED, "unauthorized")
             return False
@@ -159,18 +160,20 @@ class EngineServer:
 
     async def _status_message(self) -> str:
         status = await asyncio.to_thread(self._safe_compute)
-        self._last_status = status.model_dump_json()
         return make("status", status)
 
     async def _status_loop(self) -> None:
+        last_broadcast: str | None = None
         while True:
             await asyncio.sleep(self._status_interval)
             if not self._clients:
                 continue
-            previous = self._last_status
-            message = await self._status_message()
-            if self._last_status == previous:
+            status = await asyncio.to_thread(self._safe_compute)
+            current = status.model_dump_json()
+            if current == last_broadcast:
                 continue
+            last_broadcast = current
+            message = make("status", status)
             for ws in list(self._clients):
                 with contextlib.suppress(ConnectionClosed):
                     await ws.send(message)

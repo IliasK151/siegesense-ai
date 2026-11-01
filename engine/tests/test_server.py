@@ -219,3 +219,28 @@ async def test_connect_survives_watcher_error(tmp_path):
         await ws.close()
     finally:
         await server.stop()
+
+
+async def test_token_compare_constant_time(engine, monkeypatch):
+    import hmac
+
+    calls = []
+    real = hmac.compare_digest
+    monkeypatch.setattr(hmac, "compare_digest", lambda a, b: calls.append(1) or real(a, b))
+    _, port, _ = engine
+    ws = await authed(port)
+    assert calls
+    await ws.close()
+
+
+async def test_new_client_does_not_mask_status_change(engine):
+    _, port, watcher = engine
+    a = await authed(port)
+    await recv_type(a, "status")
+    watcher.state = GameState(True, True)
+    b = await authed(port)  # gets the fresh status on connect
+    await recv_type(b, "status")
+    status = await recv_type(a, "status", timeout=0.5)
+    assert status["payload"]["lights"]["game"]["state"] == "ok"
+    await a.close()
+    await b.close()
