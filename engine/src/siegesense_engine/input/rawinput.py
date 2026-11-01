@@ -58,6 +58,7 @@ class RawInputSource:
     """Reads Raw Input on a dedicated thread with a hidden message-only window."""
 
     reason: str | None = None
+    error: str | None = None  # set when the reader thread stops unexpectedly
 
     def __init__(self) -> None:
         self.available = sys.platform == "win32"
@@ -69,6 +70,8 @@ class RawInputSource:
     def start(self, sink: Sink) -> None:
         if not self.available:
             raise InputUnavailable(self.reason or "unavailable")
+        self.error = None
+        self._stopping = False
         ready = threading.Event()
         error: list[str] = []
         self._thread = threading.Thread(
@@ -81,6 +84,7 @@ class RawInputSource:
             raise InputUnavailable(error[0])
 
     def stop(self) -> None:
+        self._stopping = True
         if self._thread is None or self._thread_id is None:
             return
         _win32().user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
@@ -215,7 +219,7 @@ def _run_reader(
     buf = ctypes.create_string_buffer(256)
     msg = w.MSG()
     try:
-        while win.user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+        while (status := win.user32.GetMessageW(ctypes.byref(msg), None, 0, 0)) > 0:
             if msg.message == WM_INPUT:
                 try:
                     _handle_input(win, msg.lParam, buf, header_size, sink)
@@ -223,6 +227,11 @@ def _run_reader(
                     log.exception("raw input decode failed")
             win.user32.TranslateMessage(ctypes.byref(msg))
             win.user32.DispatchMessageW(ctypes.byref(msg))  # lets Windows clean up WM_INPUT
+        if status < 0 and not getattr(owner, "_stopping", False):
+            owner.error = f"Raw input reader stopped (error {ctypes.get_last_error()})"
+    except Exception as exc:
+        owner.error = f"Raw input reader crashed: {exc}"
+        log.exception("raw input reader crashed")
     finally:
         _register(win, None, RIDEV_REMOVE)
         win.user32.DestroyWindow(hwnd)

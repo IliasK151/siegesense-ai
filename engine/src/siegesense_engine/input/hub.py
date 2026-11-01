@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable
 
 from .events import InputEvent
-from .source import InputSource
+from .source import InputSource, InputUnavailable
 
 log = logging.getLogger(__name__)
 Subscriber = Callable[[list[InputEvent]], None]
@@ -23,6 +23,7 @@ class InputHub:
         self._subscribers: list[Subscriber] = []
         self._refs = 0
         self._task: asyncio.Task | None = None
+        self._start_error: str | None = None
 
     @property
     def active(self) -> bool:
@@ -37,10 +38,20 @@ class InputHub:
 
         return unsubscribe
 
+    @property
+    def error(self) -> str | None:
+        """Why input isn't working: a failed start, or the source reporting it died."""
+        return getattr(self.source, "error", None) or self._start_error
+
     async def acquire(self) -> None:
         if self._refs == 0:
             self._queue.clear()
-            self.source.start(self._queue.append)  # deque.append is thread-safe
+            try:
+                self.source.start(self._queue.append)  # deque.append is thread-safe
+            except InputUnavailable as exc:
+                self._start_error = str(exc)
+                raise
+            self._start_error = None
             self._task = asyncio.create_task(self._drain_loop())
         self._refs += 1
 

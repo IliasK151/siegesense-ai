@@ -72,7 +72,11 @@ class EngineServer:
         self._board = StatusBoard(
             watcher,
             store.get_profile,
-            lambda: (source.available, source.reason, self._hub.active),
+            lambda: (
+                source.available and self._hub.error is None,
+                self._hub.error or source.reason,
+                self._hub.active,
+            ),
         )
         self.warmup = WarmupService(
             self._hub, store, self.broadcast, metrics_interval=metrics_interval

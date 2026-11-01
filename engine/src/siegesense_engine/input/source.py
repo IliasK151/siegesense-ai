@@ -31,6 +31,7 @@ class InputSource(Protocol):
 class FakeInputSource:
     available = True
     reason = None
+    error: str | None = None
 
     def __init__(self) -> None:
         self.started = False
