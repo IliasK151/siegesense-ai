@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from .coach.settings import CoachSettings
 from .hud.regions import HudRegions
 
 ADS_KEYS: tuple[str, ...] = ("1x", "2.5x", "3x", "4x", "5x", "12x")
@@ -30,6 +31,7 @@ class Profile(BaseModel):
     hud_regions: HudRegions = HudRegions()
     my_score_side: Literal["left", "right"] = "left"
     capture_fps: Annotated[int, Field(ge=20, le=60)] = 30
+    coach: CoachSettings = CoachSettings()
 
     @field_validator("ads_sensitivity")
     @classmethod

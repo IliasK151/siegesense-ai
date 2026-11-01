@@ -73,6 +73,22 @@ export const HudRegions = z.object({
 });
 export type HudRegions = z.infer<typeof HudRegions>;
 
+// --- Coach settings (engine/src/siegesense_engine/coach/settings.py) -----------------------
+export const CoachSettings = z.object({
+  voice_enabled: z.boolean().default(true),
+  voice_name: z.string().nullable().default(null),
+  voice_rate: z.number().min(0.7).max(1.4).default(1),
+  voice_volume: z.number().min(0).max(1).default(1),
+  tip_frequency: z.enum(["every_death", "key_moments", "report_only"]).default("every_death"),
+  overlay_enabled: z.boolean().default(true),
+  overlay_corner: z.enum(["top_right", "top_left", "bottom_right", "bottom_left"]).default("top_right"),
+  llm_enabled: z.boolean().default(true),
+  llm_model: z.string().nullable().default(null),
+  ptt_key: z.string().min(1).max(32).default("F9"),
+});
+export type CoachSettings = z.infer<typeof CoachSettings>;
+export const DEFAULT_COACH_SETTINGS: CoachSettings = CoachSettings.parse({});
+
 /** Field schemas, exported individually so forms can validate one step at a time. */
 export const profileFields = {
   in_game_name: z.string().regex(NAME_PATTERN, "3–15 characters: letters, numbers, . _ -"),
@@ -91,6 +107,7 @@ export const profileFields = {
   hud_regions: HudRegions.default(DEFAULT_HUD_REGIONS),
   my_score_side: z.enum(["left", "right"]).default("left"),
   capture_fps: int(20, 60).default(30),
+  coach: CoachSettings.default(DEFAULT_COACH_SETTINGS),
 };
 
 export const Profile = z.object(profileFields);
