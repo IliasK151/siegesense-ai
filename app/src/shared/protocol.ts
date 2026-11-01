@@ -77,3 +77,74 @@ export const GameSettingsImport = z.object({
   source: z.string(),
 });
 export type GameSettingsImport = z.infer<typeof GameSettingsImport>;
+
+// --- Warm-up Mode (engine/src/siegesense_engine/warmup.py) ---------------------------------
+export const Conversion = z.enum(["calibrated", "estimated"]);
+export type Conversion = z.infer<typeof Conversion>;
+
+export const WarmupMetrics = z.object({
+  elapsed_s: z.number(),
+  flicks: z.number().int(),
+  corrected: z.number().int(),
+  overshoots: z.number().int(),
+  overshoot_rate: z.number(),
+  correction_rate: z.number(),
+  avg_amplitude: z.number(),
+  avg_peak_speed: z.number(),
+  shots: z.number().int(),
+  taps: z.number().int(),
+  bursts: z.number().int(),
+  sprays: z.number().int(),
+  moving_shots: z.number().int(),
+  moving_shot_rate: z.number(),
+  strafe_switches: z.number().int(),
+  crouch_spams: z.number().int(),
+  ads_jitter_per_s: z.number(),
+  score: z.number().int().nullable(),
+  conversion: Conversion,
+});
+export type WarmupMetrics = z.infer<typeof WarmupMetrics>;
+
+export const Flick = z.object({
+  id: z.number().int(),
+  t_peak: z.number(),
+  amplitude: z.number(),
+  peak_speed: z.number(),
+  duration_ms: z.number(),
+  direction: z.number(),
+  reversal: z.number(),
+  corrected: z.boolean(),
+  overshoot: z.boolean(),
+  shot: z.boolean(),
+  trace: z.array(z.tuple([z.number(), z.number()])),
+});
+export type Flick = z.infer<typeof Flick>;
+
+export const Drill = z.object({ key: z.string(), title: z.string(), text: z.string() });
+export type Drill = z.infer<typeof Drill>;
+
+export const HistoryPoint = z.object({ started_at: z.string(), score: z.number().int().nullable() });
+export type HistoryPoint = z.infer<typeof HistoryPoint>;
+
+export const WarmupSummary = z.object({
+  id: z.number().int().nullable(),
+  started_at: z.string(),
+  duration_s: z.number(),
+  metrics: WarmupMetrics,
+  drill: Drill.nullable(),
+  message: z.string(),
+  history: z.array(HistoryPoint),
+});
+export type WarmupSummary = z.infer<typeof WarmupSummary>;
+
+// --- 360° calibration (engine/src/siegesense_engine/calibration.py) -------------------------
+export const CalibrationState = z.object({
+  phase: z.enum(["armed", "measuring", "done", "cancelled"]),
+  runs: z.array(z.number().int()),
+  current_counts: z.number().int(),
+  target_runs: z.number().int(),
+  result: z.number().nullable(),
+  spread: z.number().nullable(),
+  warning: z.string().nullable(),
+});
+export type CalibrationState = z.infer<typeof CalibrationState>;

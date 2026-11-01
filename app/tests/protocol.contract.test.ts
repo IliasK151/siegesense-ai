@@ -1,7 +1,16 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Envelope, Profile, ResponsePayload, StatusPayload } from "@shared/protocol";
+import {
+  CalibrationState,
+  Envelope,
+  Flick,
+  Profile,
+  ResponsePayload,
+  StatusPayload,
+  WarmupMetrics,
+  WarmupSummary,
+} from "@shared/protocol";
 
 const dir = resolve(__dirname, "../../protocol/fixtures");
 const load = (name: string) => JSON.parse(readFileSync(resolve(dir, name), "utf8"));
@@ -34,4 +43,14 @@ describe("protocol contract", () => {
     expect(ResponsePayload.parse(load("response_ok.json").payload).ok).toBe(true);
     expect(ResponsePayload.parse(load("response_error.json").payload).ok).toBe(false);
   });
+
+  it("warm-up and calibration fixtures match their schemas", () => {
+    expect(WarmupMetrics.parse(load("metrics.json").payload).flicks).toBe(12);
+    expect(Flick.parse(load("flick.json").payload).id).toBe(1);
+    expect(CalibrationState.parse(load("calibration.json").payload).phase).toBe("measuring");
+    const summary = WarmupSummary.parse(load("warmup_summary.json").payload.data);
+    expect(summary.drill?.key).toBe("overshoot");
+    expect(summary.history.at(-1)?.score).toBe(summary.metrics.score);
+  });
 });
+

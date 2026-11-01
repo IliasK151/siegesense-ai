@@ -130,5 +130,32 @@ describe("EngineClient", () => {
     // One loop at 20 ms backoff makes ~10-15 attempts in 300 ms; multiplying loops make hundreds.
     expect(connections).toBeLessThan(25);
   });
+
+  it("delivers metrics flick and calibration pushes", async () => {
+    const c = client();
+    const seen: string[] = [];
+    c.on("metrics", (m) => seen.push(`metrics:${m.flicks}`));
+    c.on("flick", (f) => seen.push(`flick:${f.id}`));
+    c.on("calibration", (s) => seen.push(`calibration:${s.phase}`));
+    await c.connect();
+    for (const name of ["metrics.json", "flick.json", "calibration.json"]) {
+      const env = readFileSync(resolve(__dirname, "../../protocol/fixtures", name), "utf8");
+      for (const ws of server.clients) ws.send(env);
+    }
+    await until(() => seen.length === 3);
+    expect(seen).toEqual(["metrics:12", "flick:1", "calibration:measuring"]);
+    c.close();
+  });
+
+  it("drops invalid push", async () => {
+    const c = client();
+    const seen: unknown[] = [];
+    c.on("metrics", (m) => seen.push(m));
+    await c.connect();
+    for (const ws of server.clients) ws.send(JSON.stringify({ type: "metrics", ts: 1, payload: { flicks: "lots" } }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen).toEqual([]);
+    c.close();
+  });
 });
 

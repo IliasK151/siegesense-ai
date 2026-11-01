@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Profile, StatusPayload } from "@shared/protocol";
-import type { ConnState } from "@/lib/engineClient";
+import type { ConnState, PushMap, PushType } from "@/lib/engineClient";
 import { EngineError } from "@/lib/engineClient";
 import type { EngineLike } from "@/lib/engineContext";
 
@@ -10,6 +10,10 @@ const fixture = (name: string) =>
 
 export const statusFixture = (): StatusPayload => fixture("status.json").payload;
 export const profileFixture = (): Profile => fixture("save_profile.json").payload.profile;
+export const metricsFixture = () => fixture("metrics.json").payload;
+export const flickFixture = () => fixture("flick.json").payload;
+export const calibrationFixture = () => fixture("calibration.json").payload;
+export const summaryFixture = () => fixture("warmup_summary.json").payload.data;
 
 type Handler = (payload: Record<string, unknown>) => unknown;
 
@@ -18,7 +22,12 @@ export class FakeEngine implements EngineLike {
   connState: ConnState = "open";
   calls: { type: string; payload: Record<string, unknown> }[] = [];
   handlers: Record<string, Handler> = {};
-  private statusCbs = new Set<(s: StatusPayload) => void>();
+  private pushCbs: { [K in PushType]: Set<(p: PushMap[K]) => void> } = {
+    status: new Set(),
+    metrics: new Set(),
+    flick: new Set(),
+    calibration: new Set(),
+  };
   private stateCbs = new Set<(s: ConnState) => void>();
 
   constructor(opts: { profile?: Profile | null; status?: StatusPayload } = {}) {
@@ -44,9 +53,15 @@ export class FakeEngine implements EngineLike {
     return (await h(payload as Record<string, unknown>)) as T;
   }
 
-  on(_type: "status", cb: (s: StatusPayload) => void) {
-    this.statusCbs.add(cb);
-    return () => this.statusCbs.delete(cb);
+  on<K extends PushType>(type: K, cb: (p: PushMap[K]) => void) {
+    this.pushCbs[type].add(cb);
+    return () => {
+      this.pushCbs[type].delete(cb);
+    };
+  }
+
+  emit<K extends PushType>(type: K, payload: PushMap[K]) {
+    for (const cb of this.pushCbs[type]) cb(payload);
   }
 
   onState(cb: (s: ConnState) => void) {
@@ -55,7 +70,7 @@ export class FakeEngine implements EngineLike {
   }
 
   emitStatus(s: StatusPayload) {
-    for (const cb of this.statusCbs) cb(s);
+    this.emit("status", s);
   }
 
   emitState(s: ConnState) {

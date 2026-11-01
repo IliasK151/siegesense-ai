@@ -1,6 +1,14 @@
 // WebSocket client for the local engine: authenticates, sends requests, delivers pushes,
 // and reconnects with backoff when the connection drops.
-import { Envelope, ResponsePayload, StatusPayload } from "@shared/protocol";
+import {
+  CalibrationState,
+  Envelope,
+  Flick,
+  ResponsePayload,
+  StatusPayload,
+  WarmupMetrics,
+} from "@shared/protocol";
+import type { z } from "zod";
 
 export type EngineConnection = { port: number; token: string };
 export type ConnState = "connecting" | "open" | "reconnecting" | "closed";
@@ -17,7 +25,19 @@ export class EngineError extends Error {
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: EngineError) => void; timer: ReturnType<typeof setTimeout> };
 type Options = { WebSocketImpl?: typeof WebSocket; backoffMs?: number[]; requestTimeoutMs?: number };
-type PushMap = { status: StatusPayload };
+export type PushMap = {
+  status: StatusPayload;
+  metrics: WarmupMetrics;
+  flick: Flick;
+  calibration: CalibrationState;
+};
+export type PushType = keyof PushMap;
+const PUSH_SCHEMAS: { [K in PushType]: z.ZodType<PushMap[K]> } = {
+  status: StatusPayload,
+  metrics: WarmupMetrics,
+  flick: Flick,
+  calibration: CalibrationState,
+};
 
 export class EngineClient {
   private ws: WebSocket | null = null;
@@ -26,7 +46,12 @@ export class EngineClient {
   private attempt = 0;
   private closedByUser = false;
   private pending = new Map<string, Pending>();
-  private pushListeners: { [K in keyof PushMap]: Set<(p: PushMap[K]) => void> } = { status: new Set() };
+  private pushListeners: { [K in PushType]: Set<(p: PushMap[K]) => void> } = {
+    status: new Set(),
+    metrics: new Set(),
+    flick: new Set(),
+    calibration: new Set(),
+  };
   private stateListeners = new Set<(s: ConnState) => void>();
   private connectPromise: Promise<void> | null = null;
   private readonly WS: typeof WebSocket;
@@ -166,10 +191,13 @@ export class EngineClient {
       else pending.reject(new EngineError(res.data.error.code, res.data.error.message));
       return;
     }
-    if (env.type === "status") {
-      const status = StatusPayload.safeParse(env.payload);
-      if (status.success) for (const cb of this.pushListeners.status) cb(status.data);
-    }
+    if (env.type in PUSH_SCHEMAS) this.deliver(env.type as PushType, env.payload);
+  }
+
+  private deliver<K extends PushType>(type: K, payload: unknown): void {
+    const parsed = PUSH_SCHEMAS[type].safeParse(payload);
+    if (!parsed.success) return;
+    for (const cb of this.pushListeners[type]) cb(parsed.data);
   }
 
   private onClose(ws: WebSocket): void {
