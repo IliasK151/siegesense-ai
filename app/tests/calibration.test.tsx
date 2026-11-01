@@ -121,4 +121,29 @@ describe("calibration in the app", () => {
     expect(saved.counts_per_360).toBe(31500);
     expect(await screen.findByText(/31,500 counts/)).toBeInTheDocument();
   });
+
+  it("changing sensitivity in setup clears an old calibration", async () => {
+    const engine = new FakeEngine({ profile: { ...profileFixture(), counts_per_360: 31500 } });
+    render(<Root client={engine} />);
+    await user.click(await screen.findByRole("button", { name: "Edit setup" }));
+    await user.click(await screen.findByRole("button", { name: "Get started" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    const yaw = screen.getByLabelText("Horizontal sensitivity");
+    await user.clear(yaw);
+    await user.type(yaw, "15");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("button", { name: "Start calibration" })).toBeInTheDocument();
+    expect(screen.queryByText(/Calibrated:/)).not.toBeInTheDocument();
+  });
+
+  it("keeping the same sensitivity keeps the calibration", async () => {
+    const engine = new FakeEngine({ profile: { ...profileFixture(), counts_per_360: 31500 } });
+    render(<Root client={engine} />);
+    await user.click(await screen.findByRole("button", { name: "Edit setup" }));
+    await user.click(await screen.findByRole("button", { name: "Get started" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Calibrated: 31,500/)).toBeInTheDocument();
+  });
 });
+
