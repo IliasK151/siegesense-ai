@@ -116,6 +116,7 @@ describe("setup wizard", () => {
     await skipCalibration();
     await user.type(screen.getByLabelText("Field of view"), "84");
     await user.click(next());
+    await user.click(await screen.findByRole("button", { name: "Skip HUD check" }));
     await user.click(await screen.findByRole("button", { name: "Save profile" }));
     expect(await screen.findByTestId("status-card")).toBeInTheDocument();
     expect(engine.calls.find((c) => c.type === "save_profile")?.payload).toEqual({
@@ -150,6 +151,7 @@ describe("setup wizard", () => {
     await skipCalibration();
     await user.type(screen.getByLabelText("Field of view"), "84");
     await user.click(next());
+    await user.click(await screen.findByRole("button", { name: "Skip HUD check" }));
     await user.click(await screen.findByRole("button", { name: "Save profile" }));
     expect(await screen.findByText("dpi too low")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save profile" })).toBeInTheDocument();
@@ -178,6 +180,7 @@ describe("setup wizard", () => {
     expect(within(fov.closest("div")!.parentElement!).getByText("Not found — enter manually")).toBeInTheDocument();
     await user.type(fov, "84");
     await user.click(next());
+    await user.click(await screen.findByRole("button", { name: "Skip HUD check" }));
     await user.click(await screen.findByRole("button", { name: "Save profile" }));
     expect(await screen.findByTestId("status-card")).toBeInTheDocument();
     const saved = engine.calls.find((c) => c.type === "save_profile")?.payload.profile as Record<string, unknown>;

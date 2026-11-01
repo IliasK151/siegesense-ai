@@ -23,6 +23,7 @@ test("first run completes setup and shows home", async ({ page }) => {
   await expect(page.getByText(/Borderless is perfect/)).toBeVisible();
   await page.screenshot({ path: "test-results/03-display.png" });
   await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Skip HUD check" }).click();
   await page.getByRole("button", { name: "Save profile" }).click();
 
   await expect(page.getByText("Let's get better, Ash.Main.")).toBeVisible();

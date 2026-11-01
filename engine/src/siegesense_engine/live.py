@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import cv2
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .capture.frames import CaptureUnavailable, Frame
 from .capture.service import CaptureHub
@@ -22,6 +22,7 @@ from .clips import ClipWriter
 from .errors import RequestError
 from .hud.ocr import OcrEngine
 from .hud.reader import HudCheckResult, HudReader, HudReading
+from .hud.regions import HudRegions
 from .input.events import InputEvent, MouseMove
 from .input.hub import InputHub
 from .input.source import InputUnavailable
@@ -236,15 +237,25 @@ class LiveService:
         await self._push("live_event", event)
 
     # -- HUD check ---------------------------------------------------------------------
-    async def _reader_for_check(self) -> HudReader:
+    async def _reader_for_check(self, payload: dict[str, Any] | None) -> HudReader:
+        """Uses the saved profile, or the unsaved boxes/side the player is editing."""
+        payload = payload or {}
         profile = await asyncio.to_thread(self._store.get_profile)
-        if profile is None:
+        name = payload.get("in_game_name") or (profile.in_game_name if profile else None)
+        if not name:
             raise RequestError("no_profile", "Finish setup first.")
+        regions = profile.hud_regions if profile else HudRegions()
+        if payload.get("regions") is not None:
+            try:
+                regions = HudRegions.model_validate(payload["regions"])
+            except ValidationError as exc:
+                raise RequestError("invalid_regions", str(exc.errors()[0]["msg"])) from exc
+        side = payload.get("my_score_side") or (profile.my_score_side if profile else "left")
         ocr = await asyncio.to_thread(self._ocr_factory)
-        return HudReader(ocr, profile.hud_regions, profile.in_game_name, profile.my_score_side)
+        return HudReader(ocr, regions, name, side if side in ("left", "right") else "left")
 
-    async def hud_check(self, _: dict[str, Any] | None = None) -> HudCheckResult:
-        reader = await self._reader_for_check()
+    async def hud_check(self, payload: dict[str, Any] | None = None) -> HudCheckResult:
+        reader = await self._reader_for_check(payload)
         got: asyncio.Future[Frame] = asyncio.get_running_loop().create_future()
         loop = asyncio.get_running_loop()
 
@@ -272,7 +283,7 @@ class LiveService:
         image = await asyncio.to_thread(cv2.imread, str(path)) if path.is_file() else None
         if image is None:
             raise RequestError("not_found", f"Could not open image: {path}")
-        reader = await self._reader_for_check()
+        reader = await self._reader_for_check(payload)
         return await asyncio.to_thread(reader.snapshot, Frame(self._clock(), image))
 
     async def clip_dir(self, _: dict[str, Any] | None = None) -> dict[str, Any]:

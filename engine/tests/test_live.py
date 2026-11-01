@@ -165,3 +165,31 @@ def test_live_fixtures_validate(protocol_fixtures):
     assert RoundSummary.model_validate(payload("round_summary.json")).died
     assert HudCheckResult.model_validate(payload("hud_check.json")["data"]).readers
     assert MatchSummary.model_validate(payload("match_summary.json")["data"]).rounds
+
+
+@pytest.mark.ocr
+async def test_hud_check_uses_draft_regions(tmp_path, ocr):
+    server, port, _ = await make(tmp_path, None, ocr)
+    img = tmp_path / "shot.png"
+    cv2.imwrite(str(img), render({"timer": 165, "score": (2, 1), "health": 87, "kills": []}))
+    shifted = {
+        "killfeed": {"x": 0.7, "y": 0.08, "w": 0.29, "h": 0.22},
+        "timer": {"x": 0.1, "y": 0.5, "w": 0.06, "h": 0.045},
+        "score_left": {"x": 0.42, "y": 0.015, "w": 0.04, "h": 0.045},
+        "score_right": {"x": 0.54, "y": 0.015, "w": 0.04, "h": 0.045},
+        "health": {"x": 0.02, "y": 0.88, "w": 0.07, "h": 0.07},
+        "centre": {"x": 0.4, "y": 0.4, "w": 0.2, "h": 0.2},
+    }
+    try:
+        ws = await authed(port)
+        res = await request(ws, "hud_check_file", {"path": str(img), "regions": shifted})
+        readers = {r["key"]: r for r in res["data"]["readers"]}
+        assert not readers["timer"]["ok"]  # the draft box is off the timer
+        assert res["data"]["regions"]["timer"]["x"] == 0.1
+        bad = await request(
+            ws, "hud_check_file", {"path": str(img), "regions": {"timer": 5}}, id="b"
+        )
+        assert bad["error"]["code"] == "invalid_regions"
+        await ws.close()
+    finally:
+        await server.stop()

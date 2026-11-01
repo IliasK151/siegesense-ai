@@ -1,6 +1,8 @@
-import { Crosshair, RotateCcw } from "lucide-react";
+import { DEFAULT_HUD_REGIONS, type HudRegions } from "@shared/protocol";
+import { Crosshair, RotateCcw, ScanSearch } from "lucide-react";
 import { useState } from "react";
 import { CalibrationPanel } from "@/components/calibration/CalibrationPanel";
+import { HudCheck } from "@/components/hud/HudCheck";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -16,7 +18,20 @@ export function Settings() {
   const { profile, reload } = useProfile();
   const go = useNav((s) => s.go);
   const [calibrating, setCalibrating] = useState(false);
+  const [hudOpen, setHudOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function saveHud(hud_regions: HudRegions, my_score_side: "left" | "right") {
+    if (!profile) return;
+    setError(null);
+    try {
+      await engine.request("save_profile", { profile: { ...profile, hud_regions, my_score_side } });
+      await reload();
+      setHudOpen(false);
+    } catch (err) {
+      setError(err instanceof EngineError ? err.message : "Could not save the HUD layout.");
+    }
+  }
 
   async function saveCalibration(counts: number) {
     if (!profile) return;
@@ -76,6 +91,32 @@ export function Settings() {
             <p role="alert" className="mt-3 text-xs text-error">
               {error}
             </p>
+          )}
+        </Card>
+
+        <Card
+          title="HUD check"
+          action={
+            !hudOpen && (
+              <Button size="sm" icon={ScanSearch} onClick={() => setHudOpen(true)}>
+                Open HUD check
+              </Button>
+            )
+          }
+        >
+          <p className="text-sm text-muted">
+            Tell SiegeSense where your kill feed, timer, score and health are. Re-check after changing resolution or HUD
+            settings.
+          </p>
+          {hudOpen && profile && (
+            <div className="mt-4">
+              <HudCheck
+                regions={profile.hud_regions ?? DEFAULT_HUD_REGIONS}
+                side={profile.my_score_side ?? "left"}
+                inGameName={profile.in_game_name}
+                onSave={saveHud}
+              />
+            </div>
           )}
         </Card>
       </div>

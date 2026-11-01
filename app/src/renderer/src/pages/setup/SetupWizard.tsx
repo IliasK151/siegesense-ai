@@ -12,12 +12,14 @@ import type { ImportInfo } from "./ImportBadge";
 import { StepCalibrate } from "./StepCalibrate";
 import { StepDisplay } from "./StepDisplay";
 import { StepDone } from "./StepDone";
+import { StepHud } from "./StepHud";
 import { StepPlayer } from "./StepPlayer";
 import { StepSensitivity } from "./StepSensitivity";
 import { StepWelcome } from "./StepWelcome";
 
 const CALIBRATE_STEP = WIZARD_STEPS.indexOf("Calibrate");
-const VALIDATED: (WizardStep | null)[] = [null, "player", "sensitivity", null, "display", null];
+const HUD_STEP = WIZARD_STEPS.indexOf("HUD");
+const VALIDATED: (WizardStep | null)[] = [null, "player", "sensitivity", null, "display", null, null];
 
 /** A calibration only holds for the sensitivity it was measured with. */
 function withCalibrationCheck(prev: ProfileDraft, next: ProfileDraft): ProfileDraft {
@@ -80,12 +82,13 @@ export function SetupWizard() {
     <StepSensitivity key="sens" draft={draft} update={update} importInfo={importInfo} onImported={onImported} />,
     <StepCalibrate key="cal" draft={draft} update={update} onContinue={() => move(1)} />,
     <StepDisplay key="display" draft={draft} update={update} importInfo={importInfo} />,
+    <StepHud key="hud" draft={draft} update={update} onContinue={() => move(1)} />,
     <StepDone key="done" draft={draft} error={saveError} />,
   ][step];
 
   return (
     <div data-testid="setup-wizard" className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-10">
-      <div className="w-full max-w-2xl">
+      <div className={step === HUD_STEP ? "w-full max-w-5xl" : "w-full max-w-2xl"}>
         <div className="mb-8 flex justify-center">
           <Stepper steps={WIZARD_STEPS} current={step} />
         </div>
@@ -118,7 +121,7 @@ export function SetupWizard() {
               <Button variant="primary" icon={Save} loading={saving} onClick={save}>
                 Save profile
               </Button>
-            ) : step === CALIBRATE_STEP ? (
+            ) : step === CALIBRATE_STEP || step === HUD_STEP ? (
               <span />
             ) : (
               <Button variant="primary" onClick={() => move(1)} disabled={!canNext}>

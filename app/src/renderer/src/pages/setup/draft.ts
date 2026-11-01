@@ -3,7 +3,7 @@ import { type Profile, type ProfileField, profileFields } from "@shared/protocol
 export type ProfileDraft = Partial<Profile>;
 export type WizardStep = "player" | "sensitivity" | "display";
 
-export const WIZARD_STEPS = ["Welcome", "Player", "Sensitivity", "Calibrate", "Display", "Done"] as const;
+export const WIZARD_STEPS = ["Welcome", "Player", "Sensitivity", "Calibrate", "Display", "HUD", "Done"] as const;
 
 export const STEP_FIELDS: Record<WizardStep, ProfileField[]> = {
   player: ["in_game_name"],

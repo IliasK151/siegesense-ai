@@ -16,6 +16,7 @@ async function ensureSetup(page: Page) {
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Skip for now" }).click();
   await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Skip HUD check" }).click();
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(home).toBeVisible();
 }
