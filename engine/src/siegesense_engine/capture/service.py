@@ -1,5 +1,14 @@
-"""The capture thread: keeps the ring buffer filled, hands frames to HUD/warm-up consumers at a
-lower rate, and backs off when the PC can't keep up (spec §4.3, §7 performance guard)."""
+"""Screen capture (spec §4.3, §7 performance guard).
+
+Two threads:
+- the capture thread keeps the ring buffer (death clips) filled at full frame rate and feeds
+  cheap per-frame consumers;
+- the HUD worker reads the HUD from the latest frame at a lower rate, so slow OCR never makes
+  clips choppy.
+
+When the HUD work can't keep up, the guard first lowers the HUD rate, then the capture frame
+rate (without restarting sources that can't change rate, like a replay video).
+"""
 
 from __future__ import annotations
 
@@ -17,8 +26,8 @@ from .ring import FrameRing
 log = logging.getLogger(__name__)
 Subscriber = Callable[[Frame], None]
 
-FPS_STEPS = (30, 24, 20)
-HUD_STEPS = (10.0, 6.0, 4.0)
+# Guard levels: 0 = full quality; first lower the HUD rate, then the capture frame rate.
+LEVELS: tuple[tuple[int, float], ...] = ((30, 10.0), (30, 6.0), (30, 4.0), (24, 4.0), (20, 4.0))
 
 
 @dataclass(frozen=True)
@@ -41,25 +50,32 @@ class CaptureService:
         self.source = source
         self.ring = ring
         self._base_hud = hud_hz
-        self._hud_hz = hud_hz
         self._guard_window = guard_window
         self._recover_after = recover_after
         self._subscribers: list[Subscriber] = []
         self._every_frame: list[Subscriber] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._base_fps = 30
-        self._fps = 30
-        self._level = 0  # 0 = full quality; each step lowers fps, then HUD rate
-        self._work: deque[tuple[float, float]] = deque()  # (t, seconds of consumer work)
+        self._threads: list[threading.Thread] = []
+        self._hud_slot: Frame | None = None
+        self._hud_ready = threading.Event()
+        self.error: str | None = None
+        self._reset(30)
+
+    def _reset(self, fps: int) -> None:
+        self._base_fps = fps
+        self._level = 0
+        self._fps = fps
+        self._hud_hz = self._base_hud
+        self._work: deque[tuple[float, float]] = deque()
         self._frames: deque[float] = deque()
         self._fast_since: float | None = None
-        self._restart_fps: int | None = None
+        self.error = None
 
     # -- subscribers -------------------------------------------------------------------
     def subscribe(self, cb: Subscriber, every_frame: bool = False) -> Callable[[], None]:
-        """HUD consumers get frames at the HUD rate; cheap ``every_frame`` consumers get all."""
+        """HUD consumers get frames at the HUD rate on the HUD worker; cheap ``every_frame``
+        consumers get every frame on the capture thread."""
         target = self._every_frame if every_frame else self._subscribers
         with self._lock:
             target.append(cb)
@@ -72,54 +88,66 @@ class CaptureService:
 
     # -- lifecycle ---------------------------------------------------------------------
     def start(self, fps: int) -> None:
-        self._base_fps = self._fps = fps
-        self._level = 0
-        self._hud_hz = self._base_hud
+        self._reset(fps)
         self.source.start(fps)
         self.source.latest()  # drop anything captured before this start
         self._stop.clear()
-        self._thread = threading.Thread(target=self._run, daemon=True, name="capture")
-        self._thread.start()
+        self._hud_slot = None
+        self._threads = [
+            threading.Thread(target=self._capture_loop, daemon=True, name="capture"),
+            threading.Thread(target=self._hud_loop, daemon=True, name="hud"),
+        ]
+        for t in self._threads:
+            t.start()
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2)
-            self._thread = None
+        self._hud_ready.set()
+        for t in self._threads:
+            t.join(timeout=2)
+        self._threads = []
         self.source.stop()
 
     def stats(self) -> CaptureStats:
         now = time.perf_counter()
-        recent = [t for t in self._frames if now - t <= 1.0]
-        return CaptureStats(self._fps, float(len(recent)), self._hud_hz, self._level > 0)
+        with self._lock:
+            recent = sum(1 for t in self._frames if now - t <= 1.0)
+        return CaptureStats(self._fps, float(recent), self._hud_hz, self._level > 0)
 
-    # -- loop --------------------------------------------------------------------------
-    def _run(self) -> None:
+    # -- capture thread ----------------------------------------------------------------
+    def _capture_loop(self) -> None:
         last_hud = 0.0
-        last_guard = time.perf_counter()
         while not self._stop.is_set():
-            if self._restart_fps is not None:
-                fps, self._restart_fps = self._restart_fps, None
-                with contextlib.suppress(Exception):
-                    self.source.stop()
-                    self.source.start(fps)
             frame = self.source.latest()
             if frame is None:
                 time.sleep(0.002)
-            else:
+                continue
+            with self._lock:
                 self._frames.append(frame.t)
                 while self._frames and frame.t - self._frames[0] > 2.0:
                     self._frames.popleft()
-                try:
-                    self.ring.add(frame)
-                except Exception:
-                    log.exception("ring buffer add failed")
-                self._dispatch(frame, self._every_frame)
-                if frame.t - last_hud >= 1.0 / self._hud_hz:
-                    last_hud = frame.t
-                    start = time.perf_counter()
-                    self._dispatch(frame, self._subscribers)
-                    self._work.append((start, time.perf_counter() - start))
+            try:
+                self.ring.add(frame)
+            except Exception:
+                log.exception("ring buffer add failed")
+            self._dispatch(frame, self._every_frame)
+            if frame.t - last_hud >= 1.0 / self._hud_hz:
+                last_hud = frame.t
+                self._hud_slot = frame  # the HUD worker always takes the newest frame
+                self._hud_ready.set()
+
+    # -- HUD worker --------------------------------------------------------------------
+    def _hud_loop(self) -> None:
+        last_guard = time.perf_counter()
+        while not self._stop.is_set():
+            self._hud_ready.wait(timeout=0.25)
+            self._hud_ready.clear()
+            frame, self._hud_slot = self._hud_slot, None
+            if frame is not None and not self._stop.is_set():
+                start = time.perf_counter()
+                self._dispatch(frame, self._subscribers)
+                end = time.perf_counter()
+                self._work.append((end, end - start))  # stamped when the work finished
             now = time.perf_counter()
             if now - last_guard >= min(1.0, self._guard_window / 3):
                 last_guard = now
@@ -134,6 +162,7 @@ class CaptureService:
             except Exception:
                 log.exception("capture subscriber failed")
 
+    # -- performance guard -------------------------------------------------------------
     def _guard(self, now: float) -> None:
         while self._work and now - self._work[0][0] > self._guard_window:
             self._work.popleft()
@@ -141,7 +170,7 @@ class CaptureService:
             return
         budget = 1.0 / self._hud_hz
         avg = sum(d for _, d in self._work) / len(self._work)
-        if avg > budget and self._level < len(FPS_STEPS) + len(HUD_STEPS) - 2:
+        if avg > budget and self._level < len(LEVELS) - 1:
             self._set_level(self._level + 1)
             self._work.clear()
             self._fast_since = None
@@ -155,13 +184,18 @@ class CaptureService:
 
     def _set_level(self, level: int) -> None:
         self._level = level
-        fps_idx = min(level, len(FPS_STEPS) - 1)
-        hud_idx = max(0, level - (len(FPS_STEPS) - 1))
-        fps = min(self._base_fps, FPS_STEPS[fps_idx]) if level else self._base_fps
-        self._hud_hz = min(self._base_hud, HUD_STEPS[hud_idx])
+        fps, hud = LEVELS[level]
+        self._hud_hz = min(self._base_hud, hud)
+        fps = min(self._base_fps, fps)
         if fps != self._fps:
             self._fps = fps
-            self._restart_fps = fps
+            set_fps = getattr(self.source, "set_fps", None)
+            if set_fps is not None:
+                try:
+                    set_fps(fps)
+                except Exception as exc:
+                    self.error = f"Screen capture stopped: {exc}"
+                    log.exception("could not change capture rate")
         log.info("capture level %s: %s fps, HUD %.0f Hz", level, self._fps, self._hud_hz)
 
 
@@ -172,7 +206,11 @@ class CaptureHub:
         self.source = source
         self.service = CaptureService(source, ring or FrameRing())
         self._refs = 0
-        self.error: str | None = None
+        self._start_error: str | None = None
+
+    @property
+    def error(self) -> str | None:
+        return self._start_error or (self.service.error if self._refs else None)
 
     @property
     def active(self) -> bool:
@@ -190,9 +228,9 @@ class CaptureHub:
             try:
                 self.service.start(fps)
             except CaptureUnavailable as exc:
-                self.error = str(exc)
+                self._start_error = str(exc)
                 raise
-            self.error = None
+            self._start_error = None
         self._refs += 1
 
     def release(self) -> None:

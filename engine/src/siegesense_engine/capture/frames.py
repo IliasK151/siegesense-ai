@@ -180,6 +180,11 @@ class DxcamSource:
             self._camera = None
             raise CaptureUnavailable(f"Could not start screen capture: {exc}") from exc
 
+    def set_fps(self, fps: int) -> None:
+        if self._camera is not None:
+            self._camera.stop()
+            self._camera.start(target_fps=fps, video_mode=True)
+
     def latest(self) -> Frame | None:
         if self._camera is None:
             return None
