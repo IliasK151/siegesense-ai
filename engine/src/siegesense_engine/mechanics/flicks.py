@@ -46,7 +46,7 @@ class Flick:
 class _Candidate:
     peak_speed: float
     peak_idx: int
-    bins: list[tuple[int, float, float]]  # (idx, dx, dy) from onset to now
+    start_idx: int  # first bin whose speed crossed the flick threshold
 
 
 @dataclass
@@ -58,7 +58,8 @@ class _Correcting:
     ballistic_end_idx: int
     window_end_idx: int
     cum: float = 0.0
-    min_cum: float = 0.0
+    max_cum: float = 0.0  # furthest point reached along the flick direction
+    reversal: float = 0.0  # deepest pull-back from that furthest point
     min_idx: int = 0
     trace_tail: list[tuple[int, float]] = field(default_factory=list)
 
@@ -157,7 +158,7 @@ class FlickDetector:
         cand = self._candidate
         if cand is None:
             if speed >= cfg.min_peak_speed:
-                self._candidate = _Candidate(speed, idx, [])
+                self._candidate = _Candidate(speed, idx, idx)
             return
 
         if speed > cand.peak_speed:
@@ -171,12 +172,16 @@ class FlickDetector:
         assert cand is not None
         self._candidate = None
         threshold = cfg.end_ratio * cand.peak_speed
-        hist = [h for h in self._history if h[0] <= end_idx]
-        onset_idx = hist[0][0]
+        lookback = int(cfg.max_lookback / cfg.bin_s)
+        # Only recent bins count: after an idle gap, old bins are not part of this flick.
+        hist = [h for h in self._history if cand.peak_idx - lookback <= h[0] <= end_idx]
+        onset_idx = cand.start_idx
         for h_idx, _, _, h_speed in reversed(hist):
             if h_idx < cand.peak_idx and h_speed < threshold:
                 onset_idx = h_idx
                 break
+        if onset_idx > cand.start_idx:
+            onset_idx = cand.start_idx
         ballistic = [(i, x, y) for i, x, y, _ in hist if onset_idx <= i < end_idx]
         sx = sum(x for _, x, _ in ballistic)
         sy = sum(y for _, _, y in ballistic)
@@ -222,8 +227,9 @@ class FlickDetector:
             self._finish_correction()
             return
         c.cum += dx * c.ux + dy * c.uy
-        if c.cum < c.min_cum:
-            c.min_cum, c.min_idx = c.cum, idx
+        c.max_cum = max(c.max_cum, c.cum)
+        if c.max_cum - c.cum > c.reversal:
+            c.reversal, c.min_idx = c.max_cum - c.cum, idx
         base = c.trace_tail[-1][1] if c.trace_tail else 0.0
         c.trace_tail.append((idx, base + dx * c.ux + dy * c.uy))
         if idx == c.window_end_idx:
@@ -235,7 +241,7 @@ class FlickDetector:
         assert c is not None
         self._correcting = None
         f = c.flick
-        f.reversal = max(0.0, -c.min_cum)
+        f.reversal = c.reversal
         f.corrected = f.reversal >= cfg.correction_ratio * f.amplitude
         f.trace = [((i - c.onset_idx) * cfg.bin_s * 1000, round(p, 3)) for i, p in c.trace_tail]
         ballistic_end_t = c.ballistic_end_idx * cfg.bin_s

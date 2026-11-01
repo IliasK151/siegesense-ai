@@ -16,6 +16,12 @@ import { useWarmup } from "@/store/warmup";
 import { PageHeader } from "./PageHeader";
 
 const setOverlay = (visible: boolean) => window.siegesense?.setOverlayVisible?.(visible);
+const INTERRUPTED = "Your warm-up was interrupted because the engine restarted. Start a new one.";
+
+function interrupt() {
+  useWarmup.getState().set({ phase: "idle", startedAt: null, error: INTERRUPTED });
+  setOverlay(false);
+}
 
 function useElapsed(startedAt: number | null): number {
   const [now, setNow] = useState(() => Date.now());
@@ -42,6 +48,16 @@ export function Warmup() {
     };
   }, [engine]);
 
+  // An engine restart drops the running session; don't leave the UI stuck in LIVE.
+  useEffect(
+    () =>
+      engine.onState((state) => {
+        const phase = useWarmup.getState().phase;
+        if (state === "reconnecting" && (phase === "running" || phase === "stopping")) interrupt();
+      }),
+    [engine],
+  );
+
   useEffect(() => {
     engine
       .request<{ history: HistoryPoint[] }>("get_warmup_history")
@@ -66,6 +82,10 @@ export function Warmup() {
       const summary = await engine.request<WarmupSummary>("stop_warmup");
       w.set({ phase: "summary", summary, history: summary.history, startedAt: null });
     } catch (err) {
+      if (err instanceof EngineError && (err.code === "not_running" || err.code === "disconnected")) {
+        interrupt();
+        return;
+      }
       w.set({ phase: "running", error: err instanceof EngineError ? err.message : "Could not stop the warm-up." });
       return;
     } finally {

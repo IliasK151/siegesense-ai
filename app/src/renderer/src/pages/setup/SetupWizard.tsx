@@ -19,6 +19,13 @@ import { StepWelcome } from "./StepWelcome";
 const CALIBRATE_STEP = WIZARD_STEPS.indexOf("Calibrate");
 const VALIDATED: (WizardStep | null)[] = [null, "player", "sensitivity", null, "display", null];
 
+/** A calibration only holds for the sensitivity it was measured with. */
+function withCalibrationCheck(prev: ProfileDraft, next: ProfileDraft): ProfileDraft {
+  const changed =
+    prev.yaw_sensitivity !== next.yaw_sensitivity || prev.mouse_multiplier_unit !== next.mouse_multiplier_unit;
+  return changed && next.counts_per_360 ? { ...next, counts_per_360: undefined } : next;
+}
+
 export function SetupWizard() {
   const engine = useEngine();
   const { profile, reload } = useProfile();
@@ -30,11 +37,11 @@ export function SetupWizard() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const update = (d: ProfileDraft) => setDraft((prev) => ({ ...prev, ...d }));
+  const update = (d: ProfileDraft) => setDraft((prev) => withCalibrationCheck(prev, { ...prev, ...d }));
   const onImported = (r: GameSettingsImport) => {
     const { values, missing } = sanitizeImport(r.values, r.missing);
     setDraft((prev) => {
-      const next = { ...prev, ...values };
+      const next = withCalibrationCheck(prev, { ...prev, ...values });
       // Clear fields the file had with invalid values; keep anything the file simply lacked.
       for (const field of Object.keys(r.values)) {
         if (!(field in values)) delete next[field as keyof ProfileDraft];

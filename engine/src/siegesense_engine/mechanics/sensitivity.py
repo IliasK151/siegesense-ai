@@ -1,7 +1,8 @@
 """Converting raw mouse counts into in-game degrees.
 
-Calibration (``counts_per_360``) is ground truth. Without it we use the community formula
-for Siege: degrees per count = sensitivity × MouseSensitivityMultiplierUnit × 0.0572957795.
+Calibration (``counts_per_360``) is ground truth. Without it we use the standard converter
+value for Siege: 0.00572957795 degrees per count per sensitivity point at the default
+MouseSensitivityMultiplierUnit of 0.02, scaled linearly by the multiplier.
 """
 
 from __future__ import annotations
@@ -11,7 +12,8 @@ from typing import Literal
 
 from ..profile import Profile
 
-RAD_TO_DEG_MILLI = 0.0572957795
+YAW_PER_SENS_POINT = 0.00572957795  # degrees per count, per sensitivity point
+DEFAULT_MULTIPLIER = 0.02
 
 
 @dataclass(frozen=True)
@@ -22,7 +24,8 @@ class Conversion:
 
 
 def _estimated_yaw(profile: Profile) -> float:
-    return profile.yaw_sensitivity * profile.mouse_multiplier_unit * RAD_TO_DEG_MILLI
+    scale = profile.mouse_multiplier_unit / DEFAULT_MULTIPLIER
+    return profile.yaw_sensitivity * scale * YAW_PER_SENS_POINT
 
 
 def conversion(profile: Profile) -> Conversion:

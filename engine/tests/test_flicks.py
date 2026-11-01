@@ -89,3 +89,25 @@ def test_trace_shape():
 def test_duration_reported():
     [f] = run(flick(1.0, 30, 0.12))
     assert 80 <= f.duration_ms <= 140
+
+
+def test_onset_ignores_stale_history_after_idle():
+    # a tiny movement, 10 s idle, then a Raw Input burst (8° in one bin) into a 20° flick
+    samples = [(0.1, 0.2, 0.0), (10.2, 8.0, 0.0)] + flick(10.205, 20, 0.1)
+    flicks = run(samples)
+    assert flicks
+    for f in flicks:
+        assert f.duration_ms < 400
+        assert f.trace[-1][0] < 700  # onset .. peak + 250 ms, never the 10 s idle gap
+
+
+def test_reversal_measured_from_furthest_point():
+    # 30° flick, slow forward drift of 2.5°, then a 4° pull-back (13% of the flick)
+    samples = flick(1.0, 30, 0.12)
+    t = end_time(samples)
+    samples += [(t + 0.001 * (i + 1), 2.5 / 40, 0.0) for i in range(40)]  # 62 °/s drift
+    t = end_time(samples)
+    samples += flick(t, -4, 0.05)
+    [f] = run(samples)
+    assert f.reversal == pytest.approx(4, abs=0.5)
+    assert f.corrected

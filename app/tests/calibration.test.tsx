@@ -89,7 +89,8 @@ describe("CalibrationPanel", () => {
 describe("aim helpers", () => {
   it("estimates counts and cm per 360", () => {
     const p = { ...profileFixture(), yaw_sensitivity: 10, mouse_multiplier_unit: 0.02, dpi: 800 };
-    expect(estimatedCountsPer360(p)).toBeCloseTo(360 / 0.0114591559, 0);
+    expect(estimatedCountsPer360(p)).toBeCloseTo(360 / 0.0572957795, 0);
+    expect(cmPer360(p)).toBeCloseTo(19.95, 1);
     expect(cmPer360({ ...p, counts_per_360: 36000 })).toBeCloseTo(114.3, 1);
   });
 });
@@ -120,4 +121,29 @@ describe("calibration in the app", () => {
     expect(saved.counts_per_360).toBe(31500);
     expect(await screen.findByText(/31,500 counts/)).toBeInTheDocument();
   });
+
+  it("changing sensitivity in setup clears an old calibration", async () => {
+    const engine = new FakeEngine({ profile: { ...profileFixture(), counts_per_360: 31500 } });
+    render(<Root client={engine} />);
+    await user.click(await screen.findByRole("button", { name: "Edit setup" }));
+    await user.click(await screen.findByRole("button", { name: "Get started" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    const yaw = screen.getByLabelText("Horizontal sensitivity");
+    await user.clear(yaw);
+    await user.type(yaw, "15");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("button", { name: "Start calibration" })).toBeInTheDocument();
+    expect(screen.queryByText(/Calibrated:/)).not.toBeInTheDocument();
+  });
+
+  it("keeping the same sensitivity keeps the calibration", async () => {
+    const engine = new FakeEngine({ profile: { ...profileFixture(), counts_per_360: 31500 } });
+    render(<Root client={engine} />);
+    await user.click(await screen.findByRole("button", { name: "Edit setup" }));
+    await user.click(await screen.findByRole("button", { name: "Get started" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Calibrated: 31,500/)).toBeInTheDocument();
+  });
 });
+

@@ -1,7 +1,7 @@
 """Writes tests/fixtures/warmup_replay.jsonl: a synthetic 12-flick warm-up for the e2e test.
 
 Run from engine/: python tests/make_replay.py
-Counts use the e2e profile's estimated conversion (yaw 12 x 0.02 x 0.0572957795 deg/count).
+Counts use the e2e profile's estimated conversion (yaw 12 x 0.00572957795 deg/count).
 """
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 
 from synth import end_time, flick, to_counts
 
-DEG_PER_COUNT = 12 * 0.02 * 0.0572957795
+DEG_PER_COUNT = 12 * 0.00572957795
 OUT = Path(__file__).parent / "fixtures" / "warmup_replay.jsonl"
 
 

@@ -114,4 +114,27 @@ describe("Warm-up page", () => {
     await user.click(await screen.findByRole("button", { name: "Start Warm-up" }));
     expect(await screen.findByRole("heading", { name: "Warm-up" })).toBeInTheDocument();
   });
+
+  it("stop after an engine restart returns to idle", async () => {
+    const engine = setup();
+    await start();
+    engine.handlers.stop_warmup = () => {
+      throw new EngineError("not_running", "No warm-up is running.");
+    };
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+    expect(await screen.findByRole("button", { name: "Start warm-up" })).toBeInTheDocument();
+    expect(screen.getByText(/warm-up was interrupted/i)).toBeInTheDocument();
+  });
+
+  it("engine reconnect ends a running warm-up", async () => {
+    const setOverlayVisible = vi.fn();
+    window.siegesense = { setOverlayVisible } as never;
+    const engine = setup();
+    await start();
+    act(() => engine.emitState("reconnecting"));
+    expect(await screen.findByRole("button", { name: "Start warm-up" })).toBeInTheDocument();
+    expect(screen.getByText(/warm-up was interrupted/i)).toBeInTheDocument();
+    expect(setOverlayVisible).toHaveBeenLastCalledWith(false);
+  });
 });
+

@@ -192,3 +192,42 @@ async def test_unavailable_light_explains(tmp_path):
             assert light["fix"]
     finally:
         await server.stop()
+
+
+class FailingSource(FakeInputSource):
+    def start(self, sink):
+        from siegesense_engine.input.source import InputUnavailable
+
+        raise InputUnavailable("Windows refused raw input registration (error 5)")
+
+
+async def test_registration_failure_turns_light_amber(tmp_path):
+    server, port, _ = await make_server(tmp_path, FailingSource())
+    try:
+        ws = await authed(port)
+        res = await request(ws, "start_warmup")
+        assert res["error"]["code"] == "input_unavailable"
+        async with asyncio.timeout(3):
+            while True:
+                s = await recv_type(ws, "status", timeout=2)
+                light = s["payload"]["lights"]["input"]
+                if light["state"] == "warn":
+                    break
+        assert "error 5" in light["detail"]
+        await ws.close()
+    finally:
+        await server.stop()
+
+
+async def test_reader_thread_death_turns_light_amber(fake):
+    source, port, _ = fake
+    ws = await authed(port)
+    await request(ws, "start_warmup")
+    source.error = "Raw input reader stopped unexpectedly"
+    async with asyncio.timeout(3):
+        while True:
+            s = await recv_type(ws, "status", timeout=2)
+            if s["payload"]["lights"]["input"]["state"] == "warn":
+                break
+    assert s["payload"]["lights"]["input"]["detail"] == "Raw input reader stopped unexpectedly"
+    await ws.close()

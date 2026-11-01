@@ -24,7 +24,7 @@
 
 - **Reaction time** needs screen capture (step 3) and is deferred there. **Re-peek** needs fight detection (step 3/4) and is deferred too.
 - **ADS-specific degree conversion** (scope multipliers, X-factor, FOV) is not modelled yet: all movement is converted with the hip-fire factor. Overshoot/correction are ratios, so they are unaffected; absolute degrees while ADS are approximate. ADS state is still tracked (right mouse button held) for jitter.
-- **Formula estimate** for degrees per count: `yaw_sensitivity × mouse_multiplier_unit × 0.0572957795` (community formula; labelled "estimated" in the UI, with calibration recommended). Pitch uses `pitch_sensitivity` the same way. Calibration replaces both with `360 / counts_per_360` (pitch scaled by `pitch_sensitivity / yaw_sensitivity`).
+- **Formula estimate** for degrees per count: `yaw_sensitivity × (mouse_multiplier_unit / 0.02) × 0.00572957795` (standard converter value; corrected after review — the first version was 5× too small; labelled "estimated" in the UI, with calibration recommended). Pitch uses `pitch_sensitivity` the same way. Calibration replaces both with `360 / counts_per_360` (pitch scaled by `pitch_sensitivity / yaw_sensitivity`).
 - **Overshoot shot window** starts at the moment the reversal is deepest (the "correction time").
 - **Default keys**: W/A/S/D move, C crouch, F8 calibration hotkey. Not configurable in this step.
 
