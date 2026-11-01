@@ -1,0 +1,7 @@
+{"type":"status","ts":10,"payload":{"lights":{
+  "game":{"state":"warn","label":"Siege not running","detail":"Rainbow Six Siege was not detected.","fix":"Launch Rainbow Six Siege"},
+  "capture":{"state":"off","label":"Screen capture","detail":"Arrives in a later update","fix":null},
+  "input":{"state":"off","label":"Input tracking","detail":"Arrives in a later update","fix":null},
+  "hud":{"state":"off","label":"HUD reader","detail":"Arrives in a later update","fix":null},
+  "coach":{"state":"off","label":"Coach","detail":"Arrives in a later update","fix":null},
+  "voice":{"state":"off","label":"Voice","detail":"Arrives in a later update","fix":null}}}}

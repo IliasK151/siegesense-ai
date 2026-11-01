@@ -1,0 +1,15 @@
+{
+ "type": "calibration",
+ "ts": 1000,
+ "payload": {
+  "phase": "measuring",
+  "runs": [
+   31416
+  ],
+  "current_counts": 12045,
+  "target_runs": 3,
+  "result": null,
+  "spread": null,
+  "warning": null
+ }
+}

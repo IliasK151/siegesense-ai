@@ -1,0 +1,15 @@
+{
+ "type": "tip",
+ "ts": 1000,
+ "payload": {
+  "id": "6f1c2a9e4b7d4c1e9a0b3c5d7e9f1a2b",
+  "rule": "early_death",
+  "slot": "death",
+  "round": 3,
+  "text": "You died 12 seconds into the round. Slow your opening \u2014 clear one angle at a time and let utility go first.",
+  "evidence": {
+   "time_alive_s": 12.0
+  },
+  "spoken": true
+ }
+}

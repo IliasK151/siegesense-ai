@@ -1,0 +1,64 @@
+{
+ "type": "response",
+ "ts": 1000,
+ "payload": {
+  "ok": true,
+  "data": {
+   "id": 4,
+   "started_at": "2026-11-01T18:30:00+00:00",
+   "ended_at": "2026-11-01T19:05:00+00:00",
+   "rounds": [
+    {
+     "number": 3,
+     "phase_seen": [
+      "prep",
+      "action"
+     ],
+     "started_t": 1193.3,
+     "ended_t": 1260.0,
+     "result": "loss",
+     "kills": 1,
+     "died": true,
+     "death_confidence": "ok",
+     "time_alive_s": 41.2,
+     "first_blood": false,
+     "first_death": true,
+     "traded": false,
+     "traded_teammate": 0,
+     "repeeks": 1
+    }
+   ],
+   "deaths": [
+    {
+     "round": 3,
+     "killer": "Bandit.X",
+     "time_alive_s": 41.2,
+     "confidence": "ok",
+     "clip": "20261101-183000-r3-death.mp4"
+    }
+   ],
+   "report": {
+    "problems": [
+     {
+      "rule": "early_death",
+      "count": 4,
+      "text": "You died 12 seconds into the round. Slow your opening \u2014 clear one angle at a time and let utility go first."
+     },
+     {
+      "rule": "repeek",
+      "count": 2,
+      "text": "You re-peeked the same angle after a kill."
+     }
+    ],
+    "best_moment": "Round 7: 3 kills, first blood",
+    "drill": {
+     "key": "overshoot",
+     "title": "Overshooting your flicks",
+     "text": "In the Shooting Range, flick between two targets at about 70% speed for 20 reps. Focus on stopping on the head, not past it."
+    },
+    "summary_line": "5\u20137 in rounds, 9 deaths. Biggest thing to fix: overshooting your flicks."
+   }
+  }
+ },
+ "id": "12"
+}

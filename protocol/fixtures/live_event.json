@@ -1,0 +1,16 @@
+{
+ "type": "live_event",
+ "ts": 1000,
+ "payload": {
+  "kind": "death",
+  "t": 1234.5,
+  "round": 3,
+  "data": {
+   "killer": "Bandit.X",
+   "time_alive_s": 41.2,
+   "first_death": true
+  },
+  "confidence": "ok",
+  "clip": "20261101-183000-r3-death.mp4"
+ }
+}
