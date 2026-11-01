@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .game_watcher import default_game_watcher
 from .gamesettings import default_documents_dirs
+from .input.source import ReplayInputSource, default_input_source
 from .server import EngineServer
 from .store import Store
 
@@ -27,6 +28,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--documents-dir", action="append", type=Path, default=None)
+    parser.add_argument("--replay-input", type=Path, default=None, help="replay a JSONL input file")
     return parser.parse_args(argv)
 
 
@@ -54,6 +56,9 @@ async def _run(args: argparse.Namespace) -> None:
         store=store,
         watcher=default_game_watcher(),
         documents_dirs=args.documents_dir or default_documents_dirs(),
+        input_source=(
+            ReplayInputSource(args.replay_input) if args.replay_input else default_input_source()
+        ),
     )
     port = await server.start(args.port)
     print(f"READY {port}", flush=True)

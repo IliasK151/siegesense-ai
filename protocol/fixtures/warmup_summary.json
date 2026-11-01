@@ -1,0 +1,50 @@
+{
+ "type": "response",
+ "ts": 1000,
+ "payload": {
+  "ok": true,
+  "data": {
+   "id": 2,
+   "started_at": "2026-11-01T18:30:00+00:00",
+   "duration_s": 15.4,
+   "metrics": {
+    "elapsed_s": 15.4,
+    "flicks": 12,
+    "corrected": 5,
+    "overshoots": 5,
+    "overshoot_rate": 0.4167,
+    "correction_rate": 0.4167,
+    "avg_amplitude": 34.66,
+    "avg_peak_speed": 554.2,
+    "shots": 12,
+    "taps": 12,
+    "bursts": 0,
+    "sprays": 0,
+    "moving_shots": 0,
+    "moving_shot_rate": 0.0,
+    "strafe_switches": 0,
+    "crouch_spams": 0,
+    "ads_jitter_per_s": 0.0,
+    "score": 58,
+    "conversion": "estimated"
+   },
+   "drill": {
+    "key": "overshoot",
+    "title": "Overshooting your flicks",
+    "text": "In the Shooting Range, flick between two targets at about 70% speed for 20 reps. Focus on stopping on the head, not past it."
+   },
+   "message": "Overshooting your flicks",
+   "history": [
+    {
+     "started_at": "2026-10-31T18:00:00+00:00",
+     "score": 58
+    },
+    {
+     "started_at": "2026-11-01T18:30:00+00:00",
+     "score": 58
+    }
+   ]
+  }
+ },
+ "id": "9"
+}

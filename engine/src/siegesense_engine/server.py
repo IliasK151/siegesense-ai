@@ -10,13 +10,16 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
 from . import __version__
+from .errors import RequestError
 from .game_watcher import GameWatcher
 from .gamesettings import find_game_settings, parse_game_settings
+from .input.hub import InputHub
+from .input.source import InputSource, UnavailableInputSource
 from .profile import Profile
 from .protocol import (
     LIGHT_KEYS,
@@ -29,6 +32,7 @@ from .protocol import (
     parse,
     response,
 )
+from .services import CalibrationService, WarmupService
 from .status import StatusBoard
 from .store import Store
 
@@ -36,13 +40,6 @@ log = logging.getLogger(__name__)
 
 UNAUTHORIZED = 4401
 HELLO_TIMEOUT = 5.0
-
-
-class RequestError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 Handler = Callable[[dict[str, Any]], Awaitable[Any]]
@@ -63,12 +60,24 @@ class EngineServer:
         watcher: GameWatcher,
         documents_dirs: list[Path],
         status_interval: float = 1.0,
+        input_source: InputSource | None = None,
+        metrics_interval: float = 0.5,
     ) -> None:
         self._token = token
         self._store = store
         self._documents_dirs = documents_dirs
         self._status_interval = status_interval
-        self._board = StatusBoard(watcher, store.get_profile)
+        source = input_source or UnavailableInputSource("Input tracking works on Windows only")
+        self._hub = InputHub(source)
+        self._board = StatusBoard(
+            watcher,
+            store.get_profile,
+            lambda: (source.available, source.reason, self._hub.active),
+        )
+        self.warmup = WarmupService(
+            self._hub, store, self.broadcast, metrics_interval=metrics_interval
+        )
+        self.calibration = CalibrationService(self._hub, self.broadcast)
         self._clients: set[ServerConnection] = set()
         self._server: Server | None = None
         self._ticker: asyncio.Task | None = None
@@ -78,6 +87,11 @@ class EngineServer:
             "find_game_settings": self._find_game_settings,
             "import_game_settings": self._import_game_settings,
             "get_status": self._get_status,
+            "start_warmup": self.warmup.start,
+            "stop_warmup": self.warmup.stop,
+            "get_warmup_history": self.warmup.history,
+            "start_calibration": self.calibration.start,
+            "cancel_calibration": self.calibration.cancel,
         }
 
     # -- lifecycle -------------------------------------------------------------------------
@@ -86,7 +100,15 @@ class EngineServer:
         self._ticker = asyncio.create_task(self._status_loop())
         return self._server.sockets[0].getsockname()[1]
 
+    async def broadcast(self, type: str, payload: BaseModel | dict) -> None:
+        message = make(type, payload)
+        for ws in list(self._clients):
+            with contextlib.suppress(ConnectionClosed):
+                await ws.send(message)
+
     async def stop(self) -> None:
+        await self.warmup.shutdown()
+        await self.calibration.cancel()
         if self._ticker:
             self._ticker.cancel()
             with contextlib.suppress(asyncio.CancelledError):

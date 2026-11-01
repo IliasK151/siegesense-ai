@@ -47,7 +47,7 @@ def test_running_background_ok():
 
 def test_unbuilt_lights_off():
     lights = board().compute().lights
-    for key in ("capture", "input", "hud", "coach", "voice"):
+    for key in ("capture", "hud", "coach", "voice"):
         assert lights[key].state == "off"
         assert lights[key].detail == "Arrives in a later update"
 
@@ -66,3 +66,15 @@ def test_psutil_watcher_not_running(monkeypatch):
 def test_psutil_watcher_running(monkeypatch):
     monkeypatch.setattr(psutil, "process_iter", _procs("chrome.exe", "rainbowsix.EXE"))
     assert PsutilGameWatcher().poll().running is True
+
+
+def test_input_light_states():
+    def light(available, reason, active):
+        b = StatusBoard(FakeGameWatcher(), lambda: None, lambda: (available, reason, active))
+        return b.compute().lights["input"]
+
+    off = light(False, "Input tracking works on Windows only", False)
+    assert off.state == "warn" and off.detail == "Input tracking works on Windows only"
+    assert off.fix
+    assert light(True, None, False).label == "Input ready"
+    assert light(True, None, True).label == "Tracking your mouse"

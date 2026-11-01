@@ -46,3 +46,17 @@ def test_error_response_shape():
 def test_parse_rejects_garbage(text):
     with pytest.raises(ProtocolError):
         parse(text)
+
+
+def test_new_fixtures_validate(protocol_fixtures):
+    from siegesense_engine.calibration import CalibrationState
+    from siegesense_engine.warmup import FlickOut, WarmupMetrics, WarmupSummary
+
+    def payload(name):
+        return parse((protocol_fixtures / name).read_text()).payload
+
+    assert WarmupMetrics.model_validate(payload("metrics.json")).flicks == 12
+    assert FlickOut.model_validate(payload("flick.json")).id == 1
+    assert CalibrationState.model_validate(payload("calibration.json")).phase == "measuring"
+    summary = WarmupSummary.model_validate(payload("warmup_summary.json")["data"])
+    assert summary.drill is not None
