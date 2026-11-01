@@ -48,6 +48,7 @@ class WarmupService:
         capture: CaptureHub | None = None,
     ) -> None:
         self._hub = hub
+        self.is_busy: Callable[[], bool] = lambda: False
         self._capture = capture
         self._capture_unsub: Callable[[], None] | None = None
         self._store = store
@@ -65,6 +66,8 @@ class WarmupService:
     async def start(self, _: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._session is not None:
             raise RequestError("already_running", "A warm-up is already running.")
+        if self.is_busy():
+            raise RequestError("busy", "Stop Live Mode first.")
         profile = await asyncio.to_thread(self._store.get_profile)
         if profile is None:
             raise RequestError("no_profile", "Finish setup first.")

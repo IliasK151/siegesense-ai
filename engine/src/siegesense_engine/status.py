@@ -8,19 +8,16 @@ from .game_watcher import GameWatcher
 from .profile import Profile
 from .protocol import Light, StatusPayload
 
-_NOT_YET = "Arrives in a later update"
-_UNBUILT = {
-    "coach": "Coach",
-    "voice": "Voice",
-}
-
-
 # (available, reason when unavailable, currently tracking)
 InputState = Callable[[], tuple[bool, str | None, bool]]
 # (available, reason, active, fps target, behind)
 CaptureState = Callable[[], tuple[bool, str | None, bool, int, bool]]
 # (live, hud confidence low)
 HudState = Callable[[], tuple[bool, bool]]
+# (local AI enabled, cached LlmStatus or None)
+CoachState = Callable[[], tuple[bool, object]]
+# (voice enabled, speech model state)
+VoiceState = Callable[[], tuple[bool, str]]
 
 
 class StatusBoard:
@@ -31,7 +28,11 @@ class StatusBoard:
         input_state: InputState | None = None,
         capture_state: CaptureState | None = None,
         hud_state: HudState | None = None,
+        coach_state: CoachState | None = None,
+        voice_state: VoiceState | None = None,
     ) -> None:
+        self._coach_state = coach_state or (lambda: (False, None))
+        self._voice_state = voice_state or (lambda: (False, "not_downloaded"))
         self._watcher = watcher
         self._profile_getter = profile_getter
         self._input_state = input_state or (lambda: (False, "Input tracking is not set up", False))
@@ -59,6 +60,50 @@ class StatusBoard:
                 fix="Close other heavy apps, or lower Siege's graphics settings.",
             )
         return Light(state="ok", label=f"Capturing {fps} fps", detail="Reading your screen.")
+
+    def _coach_light(self) -> Light:
+        enabled, status = self._coach_state()
+        if not enabled:
+            return Light(
+                state="ok", label="Rule coach", detail="Tips come from the built-in rules."
+            )
+        if status is not None and getattr(status, "available", False):
+            return Light(
+                state="ok",
+                label=f"AI coach · {status.model}",
+                detail="A local AI rewords tips and answers your questions. Free and offline.",
+            )
+        reason = getattr(status, "reason", None) or "The local AI isn't running."
+        return Light(
+            state="warn",
+            label="Basic coach — AI not found",
+            detail=f"{reason} The rule coach still works.",
+            fix="Install Ollama (ollama.com) and run: ollama pull qwen3:4b",
+        )
+
+    def _voice_light(self) -> Light:
+        enabled, state = self._voice_state()
+        if not enabled:
+            return Light(state="off", label="Voice off", detail="Tips are shown as text only.")
+        if state == "ready":
+            return Light(state="ok", label="Voice ready", detail="Push-to-talk and spoken tips.")
+        if state == "downloading":
+            return Light(
+                state="warn", label="Downloading speech model…", detail="One-time download."
+            )
+        if state == "unavailable":
+            return Light(
+                state="warn",
+                label="Speech model failed",
+                detail="The speech model couldn't be loaded. Spoken tips still work.",
+                fix="Settings → Coach → Download speech model to try again",
+            )
+        return Light(
+            state="warn",
+            label="Speech model not downloaded",
+            detail="Spoken tips work; asking questions by voice needs the speech model.",
+            fix="Settings → Coach → Download speech model (≈140 MB)",
+        )
 
     def _hud_light(self) -> Light:
         live, low = self._hud_state()
@@ -125,7 +170,7 @@ class StatusBoard:
             "input": self._input_light(),
             "capture": self._capture_light(),
             "hud": self._hud_light(),
+            "coach": self._coach_light(),
+            "voice": self._voice_light(),
         }
-        for key, label in _UNBUILT.items():
-            lights[key] = Light(state="off", label=label, detail=_NOT_YET)
         return StatusPayload(lights=lights)

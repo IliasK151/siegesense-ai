@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, ValidationError
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
@@ -17,6 +18,9 @@ from websockets.exceptions import ConnectionClosed
 from . import __version__
 from .capture.frames import FrameSource, UnavailableFrameSource
 from .capture.service import CaptureHub
+from .coach.service import CoachService
+from .coach.settings import CoachSettings
+from .coach.stt import SpeechToText, WhisperStt
 from .errors import RequestError
 from .game_watcher import GameWatcher
 from .gamesettings import find_game_settings, parse_game_settings
@@ -69,6 +73,8 @@ class EngineServer:
         frame_source: FrameSource | None = None,
         ocr: OcrEngine | None = None,
         clips_dir: Path | None = None,
+        stt: SpeechToText | None = None,
+        llm_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._token = token
         self._store = store
@@ -96,14 +102,21 @@ class EngineServer:
                 shared_ocr.append(engine)
             return shared_ocr[0]
 
+        data_dir = Path(store.path).parent
+        self.coach = CoachService(
+            stt or WhisperStt(download_root=data_dir / "models"), llm_transport=llm_transport
+        )
         self.live = LiveService(
             self._capture,
             self._hub,
             store,
             self.broadcast,
             ocr_factory,
-            clips_dir or Path(store.path).parent / "clips",
+            clips_dir or data_dir / "clips",
+            self.coach,
         )
+        self.live.is_busy = lambda: self.warmup.running
+        self.warmup.is_busy = lambda: self.live.running
         capture = self._capture
         self._board = StatusBoard(
             watcher,
@@ -117,6 +130,8 @@ class EngineServer:
                 capture.service.stats().behind,
             ),
             lambda: (self.live.running, self.live.hud_low),
+            self._coach_state,
+            self._voice_state,
         )
         self._clients: set[ServerConnection] = set()
         self._server: Server | None = None
@@ -137,7 +152,25 @@ class EngineServer:
             "hud_check": self.live.hud_check,
             "hud_check_file": self.live.hud_check_file,
             "get_clip_dir": self.live.clip_dir,
+            "ask": self.live.ask,
+            "ask_audio": self.live.ask_audio,
+            "coach_status": self.live.coach_status,
+            "download_speech_model": self.live.download_speech_model,
         }
+
+    def _coach_settings(self):
+        profile = self._store.get_profile()
+        return profile.coach if profile else CoachSettings()
+
+    def _coach_state(self):
+        settings = self._coach_settings()
+        return settings.llm_enabled, self.coach.llm_status
+
+    def _voice_state(self):
+        return self._coach_settings().voice_enabled, self.coach.stt.state()
+
+    async def _settings_async(self):
+        return await asyncio.to_thread(self._coach_settings)
 
     def _board_input_state(self) -> tuple[bool, str | None, bool]:
         source = self._input_source
@@ -151,6 +184,7 @@ class EngineServer:
     async def start(self, port: int = 0) -> int:
         self._server = await serve(self._handle, "127.0.0.1", port)
         self._ticker = asyncio.create_task(self._status_loop())
+        self._coach_task = asyncio.create_task(self.coach.refresh_loop(self._settings_async))
         return self._server.sockets[0].getsockname()[1]
 
     async def broadcast(self, type: str, payload: BaseModel | dict) -> None:
@@ -162,6 +196,10 @@ class EngineServer:
     async def stop(self) -> None:
         await self.warmup.shutdown()
         await self.live.shutdown()
+        if getattr(self, "_coach_task", None):
+            self._coach_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._coach_task
         await self.calibration.cancel()
         if self._ticker:
             self._ticker.cancel()

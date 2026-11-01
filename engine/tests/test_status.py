@@ -45,11 +45,9 @@ def test_running_background_ok():
     assert "background" in game.label
 
 
-def test_unbuilt_lights_off():
+def test_every_light_present():
     lights = board().compute().lights
-    for key in ("coach", "voice"):
-        assert lights[key].state == "off"
-        assert lights[key].detail == "Arrives in a later update"
+    assert set(lights) == {"game", "input", "capture", "hud", "coach", "voice"}
 
 
 def _procs(*names):

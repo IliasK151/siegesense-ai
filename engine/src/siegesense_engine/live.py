@@ -4,6 +4,8 @@ Only the player's own events and round results are shown; nothing about enemies 
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import contextlib
 import logging
 import time
@@ -19,6 +21,13 @@ from pydantic import BaseModel, ValidationError
 from .capture.frames import CaptureUnavailable, Frame
 from .capture.service import CaptureHub
 from .clips import ClipWriter
+from .coach.answers import SessionFacts
+from .coach.brain import PRIORITY, CoachBrain, Tip
+from .coach.mechanics import LiveMechanics
+from .coach.report import MatchReport, build_report
+from .coach.service import CoachService
+from .coach.settings import CoachSettings
+from .coach.stt import SttUnavailable, wav_to_float
 from .errors import RequestError
 from .hud.ocr import OcrEngine
 from .hud.reader import HudCheckResult, HudReader, HudReading
@@ -54,6 +63,7 @@ class MatchSummary(BaseModel):
     ended_at: str
     rounds: list[RoundSummary]
     deaths: list[DeathInfo]
+    report: MatchReport | None = None
 
 
 class LiveService:
@@ -65,8 +75,17 @@ class LiveService:
         push: Push,
         ocr_factory: Callable[[], OcrEngine],
         clips_dir: Path,
+        coach: CoachService,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
+        self._coach = coach
+        self.is_busy: Callable[[], bool] = lambda: False
+        self._settings = CoachSettings()
+        self._brain = CoachBrain()
+        self._mech: LiveMechanics | None = None
+        self._tipped: set[int] = set()
+        self._tips: list[Tip] = []
+        self._crouch_at_round: dict[int, int] = {}
         self._capture = capture
         self._input = input_hub
         self._store = store
@@ -99,6 +118,8 @@ class LiveService:
     async def start(self, _: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._running:
             raise RequestError("already_running", "Live Mode is already running.")
+        if self.is_busy():
+            raise RequestError("busy", "Stop Warm-up first.")
         profile = await asyncio.to_thread(self._store.get_profile)
         if profile is None:
             raise RequestError("no_profile", "Finish setup first.")
@@ -123,6 +144,10 @@ class LiveService:
             self._store.start_match, self._started_at.isoformat()
         )
         self._yaw, self._yaw_scale = 0.0, conversion(profile).yaw
+        self._settings = profile.coach
+        self._brain = CoachBrain()
+        self._mech = LiveMechanics(conversion(profile))
+        self._tipped, self._tips, self._crouch_at_round = set(), [], {}
         self._trace.clear()
         self._low_since, self.hud_low = None, False
         reader = self._reader
@@ -184,6 +209,7 @@ class LiveService:
             ended_at=datetime.now(UTC).isoformat(),
             rounds=rounds,
             deaths=deaths,
+            report=build_report(self._brain, rounds),
         )
         summary.id = self._match_id
         if self._match_id is not None:
@@ -203,6 +229,8 @@ class LiveService:
     # -- input (asyncio thread) --------------------------------------------------------
     def _on_input(self, events: list[InputEvent]) -> None:
         tracker = self._tracker
+        if self._mech is not None:
+            self._mech.feed(events)
         for e in events:
             if isinstance(e, MouseMove) and e.dx:
                 self._yaw += e.dx * self._yaw_scale
@@ -221,14 +249,19 @@ class LiveService:
             self.hud_low = reading.t - self._low_since >= HUD_LOW_FOR
         else:
             self._low_since, self.hud_low = None, False
+        if self._mech is not None:
+            self._mech.poll(self._clock())
         for event in self._tracker.hud(reading):
             self._handle_event(LiveEventOut(**event.model_dump()))
 
     def _handle_event(self, out: LiveEventOut) -> None:
         if self._tracker is None:
             return
+        if out.kind == "round_start" and self._mech is not None:
+            self._crouch_at_round[out.round] = self._mech.round_marker()
         if out.kind == "death":
-            self._spawn(self._clip_then_push(out))
+            tip = self._death_tip(out)
+            self._spawn(self._clip_then_push(out, tip=tip))
         else:
             self._record(out)
             self._spawn(self._push("live_event", out))
@@ -236,6 +269,9 @@ class LiveService:
             summary = next((r for r in self._tracker.rounds() if r.number == out.round), None)
             if summary is not None:
                 self._spawn(self._push("round_summary", summary))
+                tip = self._round_end_tip(summary)
+                if tip is not None:
+                    self._spawn(self._deliver(tip))
 
     def _record(self, event: LiveEventOut) -> None:
         self._events.append(event)
@@ -253,12 +289,118 @@ class LiveService:
                 )
             )
 
+    # -- coaching (asyncio thread) -----------------------------------------------------
+    def _round(self, number: int) -> RoundSummary | None:
+        rounds = self._tracker.rounds() if self._tracker else []
+        return next((r for r in rounds if r.number == number), None)
+
+    def _death_tip(self, event: LiveEventOut) -> Tip | None:
+        """Decided at the moment of death (one tip per break); spoken after the clip is saved."""
+        if self._settings.tip_frequency == "report_only" or event.round in self._tipped:
+            return None
+        rnd = self._round(event.round)
+        if rnd is None or self._mech is None:
+            return None
+        tip = self._brain.on_death(rnd, self._tracker.rounds(), self._mech.stats(), event.data)
+        if tip is not None:
+            self._tipped.add(event.round)
+        return tip
+
+    def _round_end_tip(self, rnd: RoundSummary) -> Tip | None:
+        if self._settings.tip_frequency == "report_only" or rnd.number in self._tipped:
+            return None
+        if self._mech is None or self._tracker is None:
+            return None
+        crouch = self._mech.round_marker() - self._crouch_at_round.get(rnd.number, 0)
+        tip = self._brain.on_round_end(rnd, self._tracker.rounds(), self._mech.stats(), crouch)
+        if tip is None:
+            return None
+        if self._settings.tip_frequency == "key_moments" and PRIORITY.get(tip.rule, 0) < 70:
+            return None
+        self._tipped.add(rnd.number)
+        return tip
+
+    async def _deliver(self, tip: Tip) -> None:
+        tip = await self._coach.say(tip, {**tip.evidence, "round": tip.round}, self._settings)
+        self._tips.append(tip)
+        await self._push("tip", tip)
+
+    def facts(self) -> SessionFacts:
+        rounds = self._tracker.rounds() if self._tracker else []
+        deaths = [r for r in rounds if r.died]
+        last = next((e for e in reversed(self._events) if e.kind == "death"), None)
+        mech = self._mech.stats() if self._mech else None
+        alive = [r.time_alive_s for r in deaths if r.time_alive_s is not None]
+        return SessionFacts(
+            rounds_played=len(rounds),
+            rounds_won=sum(r.result == "win" for r in rounds),
+            rounds_lost=sum(r.result == "loss" for r in rounds),
+            deaths=len(deaths),
+            first_deaths=sum(r.first_death for r in rounds),
+            untraded_deaths=sum(not r.traded for r in deaths),
+            avg_time_alive_s=round(sum(alive) / len(alive), 1) if alive else None,
+            last_death_round=last.round if last else None,
+            last_death_killer=last.data.get("killer") if last else None,
+            last_death_time_alive_s=last.data.get("time_alive_s") if last else None,
+            kills=sum(r.kills for r in rounds),
+            repeeks=sum(r.repeeks for r in rounds),
+            flicks=mech.flicks if mech else 0,
+            overshoot_pct=round(mech.overshoot_rate * 100) if mech else 0,
+            moving_shot_pct=round(mech.moving_shot_rate * 100) if mech else 0,
+            recent_tips=[t.text for t in self._tips[-3:]],
+        )
+
+    async def _settings_now(self) -> CoachSettings:
+        profile = await asyncio.to_thread(self._store.get_profile)
+        return profile.coach if profile else CoachSettings()
+
+    async def ask(self, payload: dict[str, Any]) -> Tip:
+        question = str(payload.get("text", "")).strip()
+        if not question:
+            raise RequestError("empty_question", "Ask a question first.")
+        settings = self._settings if self._running else await self._settings_now()
+        return await self._coach.answer(question, self.facts(), settings)
+
+    async def ask_audio(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            wav = base64.b64decode(str(payload.get("wav_b64", "")), validate=True)
+            wav_to_float(wav)
+        except (ValueError, binascii.Error) as exc:
+            raise RequestError("bad_audio", f"Couldn't read the recording: {exc}") from exc
+        try:
+            text = await self._coach.stt.transcribe(wav)
+        except SttUnavailable as exc:
+            raise RequestError("stt_unavailable", str(exc)) from exc
+        if not text:
+            raise RequestError(
+                "no_speech", "I didn't catch that. Try again a bit closer to the mic."
+            )
+        tip = await self.ask({"text": text})
+        return {"text": text, "tip": tip.model_dump(mode="json")}
+
+    async def coach_status(self, _: dict[str, Any] | None = None) -> dict[str, Any]:
+        settings = await self._settings_now()
+        status = await self._coach.refresh(settings)
+        return {"llm": status.model_dump(), "stt": self._coach.stt.state()}
+
+    async def download_speech_model(self, _: dict[str, Any] | None = None) -> dict[str, Any]:
+        download = getattr(self._coach.stt, "download", None)
+        if download is not None and self._coach.stt.state() != "ready":
+            self._spawn(self._download(download))
+        return {"stt": self._coach.stt.state()}
+
+    async def _download(self, download) -> None:
+        with contextlib.suppress(SttUnavailable):
+            await download()
+
     def _spawn(self, coro) -> None:
         task = asyncio.get_running_loop().create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _clip_then_push(self, event: LiveEventOut, wait_for_after: bool = True) -> None:
+    async def _clip_then_push(
+        self, event: LiveEventOut, wait_for_after: bool = True, tip: Tip | None = None
+    ) -> None:
         """Saves the death clip, then records and pushes the death — always, even if the clip
         fails (e.g. a full disk)."""
         try:
@@ -280,6 +422,8 @@ class LiveService:
         finally:
             self._record(event)
             await self._push("live_event", event)
+            if tip is not None:
+                await self._deliver(tip)
 
     # -- HUD check ---------------------------------------------------------------------
     async def _reader_for_check(self, payload: dict[str, Any] | None) -> HudReader:

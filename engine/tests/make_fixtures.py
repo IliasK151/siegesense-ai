@@ -82,7 +82,27 @@ check = HudCheckResult(
         ReaderResult(key="killfeed", text="Ash.Main → Thermite_1", confidence=0.93, ok=True),
     ],
 )  # fmt: skip
+from siegesense_engine.coach.brain import Tip  # noqa: E402
+from siegesense_engine.coach.report import MatchReport, Problem  # noqa: E402
+from siegesense_engine.warmup import DRILLS  # noqa: E402
+
+tip = Tip(
+    id="6f1c2a9e4b7d4c1e9a0b3c5d7e9f1a2b", rule="early_death", slot="death", round=3,
+    text="You died 12 seconds into the round. Slow your opening — clear one angle at a time "
+    "and let utility go first.",
+    evidence={"time_alive_s": 12.0},
+)  # fmt: skip
+report = MatchReport(
+    problems=[Problem(rule="early_death", count=4, text=tip.text),
+              Problem(rule="repeek", count=2, text="You re-peeked the same angle after a kill.")],
+    best_moment="Round 7: 3 kills, first blood",
+    drill=DRILLS["overshoot"],
+    summary_line="5–7 in rounds, 9 deaths. Biggest thing to fix: overshooting your flicks.",
+)  # fmt: skip
+(out / "tip.json").write_text(json.dumps(env("tip", tip.model_dump()), indent=1))
+
 match = MatchSummary(
+    report=report,
     id=4, started_at="2026-11-01T18:30:00+00:00", ended_at="2026-11-01T19:05:00+00:00",
     rounds=[rnd],
     deaths=[DeathInfo(round=3, killer="Bandit.X", time_alive_s=41.2, confidence="ok",
