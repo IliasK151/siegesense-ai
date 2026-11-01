@@ -14,7 +14,8 @@ const tones = {
 };
 
 export function EventFeed({ events }: { events: LiveEvent[] }) {
-  const recent = [...events].reverse().slice(0, 40);
+  // Deaths arrive a moment late (their clip is saved first), so order by when things happened.
+  const recent = [...events].sort((a, b) => b.t - a.t).slice(0, 40);
   return (
     <ul data-testid="event-feed" className="flex flex-col gap-1">
       {recent.map((e, i) => {

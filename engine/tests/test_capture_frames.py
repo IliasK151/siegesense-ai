@@ -81,3 +81,33 @@ def test_video_file_source(tmp_path):
     src.stop()
     assert len(got) >= 25
     assert got[0].image.shape == (180, 320, 3)
+
+
+def test_video_source_restart_has_no_stale_frame(tmp_path):
+    import av
+
+    path = tmp_path / "v.mp4"
+    out = av.open(str(path), "w")
+    stream = out.add_stream("libx264", rate=30)
+    stream.width, stream.height, stream.pix_fmt = 64, 36, "yuv420p"
+    for i in range(30):
+        frame = av.VideoFrame.from_ndarray(
+            np.full((36, 64, 3), 10 + i * 7, np.uint8), format="bgr24"
+        )
+        for p in stream.encode(frame):
+            out.mux(p)
+    for p in stream.encode():
+        out.mux(p)
+    out.close()
+    src = VideoFileSource(path, realtime=True)
+    src.start(30)
+    import time
+
+    time.sleep(0.3)  # leaves an unread frame behind
+    src.stop()
+    src.start(30)
+    first = None
+    while first is None:
+        first = src.latest()
+    src.stop()
+    assert first.image.mean() < 20  # the restart begins at the first frame, not a stale one

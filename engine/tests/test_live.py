@@ -193,3 +193,28 @@ async def test_hud_check_uses_draft_regions(tmp_path, ocr):
         await ws.close()
     finally:
         await server.stop()
+
+
+async def test_ocr_ready_before_capture_starts(tmp_path, ocr):
+    order = []
+
+    class Recorder(FakeFrameSource):
+        def start(self, fps):
+            order.append("capture")
+            super().start(fps)
+
+    server, port, _ = await make(tmp_path, Recorder(SIZE), None)
+
+    def factory():
+        order.append("ocr")
+        return ocr
+
+    server.live._ocr_factory = factory
+    try:
+        ws = await authed(port)
+        assert (await request(ws, "start_live"))["ok"]
+        assert order == ["ocr", "capture"]
+        await request(ws, "stop_live", id="s")
+        await ws.close()
+    finally:
+        await server.stop()

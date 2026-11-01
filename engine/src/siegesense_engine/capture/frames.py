@@ -102,6 +102,8 @@ class VideoFileSource:
     def start(self, fps: int) -> None:
         self._stop.clear()
         self.finished = False
+        with self._lock:
+            self._latest = None  # never hand out a frame from a previous run
         self._thread = threading.Thread(target=self._run, daemon=True, name="video-source")
         self._thread.start()
 
@@ -147,6 +149,8 @@ class VideoFileSource:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2)
+        with self._lock:
+            self._latest = None
 
 
 class DxcamSource:

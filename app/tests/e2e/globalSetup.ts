@@ -1,5 +1,5 @@
 // Starts the real Python engine against a temp data dir with a fake Documents folder.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -20,6 +20,13 @@ export default async function globalSetup() {
   mkdirSync(settingsDir, { recursive: true });
   copyFileSync(join(repo, "engine/tests/fixtures/GameSettings_utf8.ini"), join(settingsDir, "GameSettings.ini"));
 
+  // A synthetic two-round match, used as the "screen" for the Live Mode test.
+  const video = join(tmp, "live_replay.mp4");
+  execFileSync(enginePython(), [join(repo, "engine/tests/make_live_replay.py"), video], {
+    cwd: join(repo, "engine", "tests"),
+    stdio: "inherit",
+  });
+
   const child: ChildProcess = spawn(
     enginePython(),
     [
@@ -33,6 +40,8 @@ export default async function globalSetup() {
       docs,
       "--replay-input",
       join(repo, "engine/tests/fixtures/warmup_replay.jsonl"),
+      "--replay-video",
+      video,
     ],
     { cwd: join(repo, "engine", "src"), stdio: ["pipe", "pipe", "inherit"] },
   );

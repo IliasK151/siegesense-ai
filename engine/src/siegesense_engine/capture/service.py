@@ -76,6 +76,7 @@ class CaptureService:
         self._level = 0
         self._hud_hz = self._base_hud
         self.source.start(fps)
+        self.source.latest()  # drop anything captured before this start
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True, name="capture")
         self._thread.start()

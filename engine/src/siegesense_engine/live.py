@@ -100,12 +100,16 @@ class LiveService:
         profile = await asyncio.to_thread(self._store.get_profile)
         if profile is None:
             raise RequestError("no_profile", "Finish setup first.")
+        if not self._capture.source.available:
+            reason = self._capture.source.reason or "Screen capture is unavailable"
+            raise RequestError("capture_unavailable", reason)
+        # Load the OCR models first (seconds on first use) so no gameplay is missed.
+        ocr = await asyncio.to_thread(self._ocr_factory)
         try:
             self._capture.acquire(profile.capture_fps)
         except CaptureUnavailable as exc:
             raise RequestError("capture_unavailable", str(exc)) from exc
         loop = asyncio.get_running_loop()
-        ocr = await asyncio.to_thread(self._ocr_factory)
         self._reader = HudReader(
             ocr, profile.hud_regions, profile.in_game_name, profile.my_score_side
         )
