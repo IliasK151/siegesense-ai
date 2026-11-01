@@ -9,13 +9,15 @@ import { useEngine, useProfile } from "@/lib/engineContext";
 import { useNav } from "@/store/nav";
 import { type ProfileDraft, sanitizeImport, stepIsValid, WIZARD_STEPS, type WizardStep } from "./draft";
 import type { ImportInfo } from "./ImportBadge";
+import { StepCalibrate } from "./StepCalibrate";
 import { StepDisplay } from "./StepDisplay";
 import { StepDone } from "./StepDone";
 import { StepPlayer } from "./StepPlayer";
 import { StepSensitivity } from "./StepSensitivity";
 import { StepWelcome } from "./StepWelcome";
 
-const VALIDATED: (WizardStep | null)[] = [null, "player", "sensitivity", "display", null];
+const CALIBRATE_STEP = WIZARD_STEPS.indexOf("Calibrate");
+const VALIDATED: (WizardStep | null)[] = [null, "player", "sensitivity", null, "display", null];
 
 export function SetupWizard() {
   const engine = useEngine();
@@ -69,6 +71,7 @@ export function SetupWizard() {
     <StepWelcome key="welcome" />,
     <StepPlayer key="player" draft={draft} update={update} />,
     <StepSensitivity key="sens" draft={draft} update={update} importInfo={importInfo} onImported={onImported} />,
+    <StepCalibrate key="cal" draft={draft} update={update} onContinue={() => move(1)} />,
     <StepDisplay key="display" draft={draft} update={update} importInfo={importInfo} />,
     <StepDone key="done" draft={draft} error={saveError} />,
   ][step];
@@ -108,6 +111,8 @@ export function SetupWizard() {
               <Button variant="primary" icon={Save} loading={saving} onClick={save}>
                 Save profile
               </Button>
+            ) : step === CALIBRATE_STEP ? (
+              <span />
             ) : (
               <Button variant="primary" onClick={() => move(1)} disabled={!canNext}>
                 Next <ArrowRight className="size-4" />

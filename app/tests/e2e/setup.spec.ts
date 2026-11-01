@@ -18,6 +18,7 @@ test("first run completes setup and shows home", async ({ page }) => {
   await page.waitForTimeout(300);
   await page.screenshot({ path: "test-results/02-sensitivity.png" });
   await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Skip for now" }).click();
 
   await expect(page.getByText(/Borderless is perfect/)).toBeVisible();
   await page.screenshot({ path: "test-results/03-display.png" });

@@ -38,6 +38,11 @@ async function toSensitivity(name = "Ash.Main") {
   await screen.findByRole("heading", { name: "Sensitivity" });
 }
 
+async function skipCalibration() {
+  await user.click(next());
+  await user.click(await screen.findByRole("button", { name: "Skip for now" }));
+}
+
 beforeEach(() => useNav.setState({ page: "home" }));
 afterEach(() => {
   delete window.siegesense;
@@ -61,7 +66,7 @@ describe("setup wizard", () => {
     expect(screen.getAllByText("Imported").length).toBeGreaterThan(0);
     expect(engine.calls.find((c) => c.type === "import_game_settings")?.payload).toEqual({ path: IMPORTED.source });
     await user.type(screen.getByLabelText("Mouse DPI"), "800");
-    await user.click(next());
+    await skipCalibration();
     await screen.findByRole("heading", { name: "Display" });
     const fov = screen.getByLabelText("Field of view").closest("div")!.parentElement!;
     expect(within(fov).getByText("Not found — enter manually")).toBeInTheDocument();
@@ -98,7 +103,7 @@ describe("setup wizard", () => {
     await toSensitivity();
     await user.click(await screen.findByRole("button", { name: "Import" }));
     await user.type(screen.getByLabelText("Mouse DPI"), "800");
-    await user.click(next());
+    await skipCalibration();
     expect(await screen.findByText(/Switch Siege to Borderless/)).toBeInTheDocument();
   });
 
@@ -107,7 +112,7 @@ describe("setup wizard", () => {
     await toSensitivity();
     await user.click(await screen.findByRole("button", { name: "Import" }));
     await user.type(screen.getByLabelText("Mouse DPI"), "800");
-    await user.click(next());
+    await skipCalibration();
     await user.type(screen.getByLabelText("Field of view"), "84");
     await user.click(next());
     await user.click(await screen.findByRole("button", { name: "Save profile" }));
@@ -138,7 +143,7 @@ describe("setup wizard", () => {
     await toSensitivity();
     await user.click(await screen.findByRole("button", { name: "Import" }));
     await user.type(screen.getByLabelText("Mouse DPI"), "800");
-    await user.click(next());
+    await skipCalibration();
     await user.type(screen.getByLabelText("Field of view"), "84");
     await user.click(next());
     await user.click(await screen.findByRole("button", { name: "Save profile" }));
@@ -163,7 +168,7 @@ describe("setup wizard", () => {
     await toSensitivity();
     await user.click(await screen.findByRole("button", { name: "Import" }));
     await user.type(screen.getByLabelText("Mouse DPI"), "800");
-    await user.click(next());
+    await skipCalibration();
     const fov = screen.getByLabelText("Field of view");
     expect(fov).toHaveValue(null);
     expect(within(fov.closest("div")!.parentElement!).getByText("Not found — enter manually")).toBeInTheDocument();
