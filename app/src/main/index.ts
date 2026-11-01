@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, screen } from "electron";
 import { IPC, type EngineConnection, type EngineState, type FileFilter } from "../preload/api";
 import { EngineSupervisor, resolveEngineCommand } from "./engineProcess";
 
@@ -38,6 +38,43 @@ ipcMain.handle(IPC.pickFile, async (_e, filters?: FileFilter[]) => {
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
+// --- Warm-up overlay: small, transparent, click-through, never takes focus from the game.
+let overlay: BrowserWindow | null = null;
+const OVERLAY_SIZE = { width: 300, height: 140 };
+const OVERLAY_MARGIN = 24;
+
+function getOverlay(): BrowserWindow {
+  if (overlay && !overlay.isDestroyed()) return overlay;
+  const area = screen.getPrimaryDisplay().workArea;
+  overlay = new BrowserWindow({
+    ...OVERLAY_SIZE,
+    x: area.x + area.width - OVERLAY_SIZE.width - OVERLAY_MARGIN,
+    y: area.y + OVERLAY_MARGIN,
+    show: false,
+    transparent: true,
+    frame: false,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    alwaysOnTop: true,
+    webPreferences: { preload: join(__dirname, "../preload/index.mjs"), sandbox: false },
+  });
+  overlay.setAlwaysOnTop(true, "screen-saver");
+  overlay.setIgnoreMouseEvents(true);
+  overlay.setVisibleOnAllWorkspaces(true);
+  overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  if (process.env.ELECTRON_RENDERER_URL) void overlay.loadURL(`${process.env.ELECTRON_RENDERER_URL}/overlay.html`);
+  else void overlay.loadFile(join(__dirname, "../renderer/overlay.html"));
+  return overlay;
+}
+
+ipcMain.on(IPC.overlaySet, (_e, visible: boolean) => {
+  if (visible) getOverlay().showInactive();
+  else if (overlay && !overlay.isDestroyed()) overlay.hide();
+});
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
@@ -53,6 +90,10 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, "../preload/index.mjs"), sandbox: false },
   });
   win.once("ready-to-show", () => win?.show());
+  win.on("closed", () => {
+    win = null;
+    app.quit();
+  });
   // Defense in depth: this window holds the engine token, so it never navigates or opens popups.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
@@ -79,4 +120,7 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => app.quit());
+app.on("before-quit", () => {
+  if (overlay && !overlay.isDestroyed()) overlay.destroy();
+});
 app.on("before-quit", () => supervisor.stop());

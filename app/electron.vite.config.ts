@@ -12,5 +12,13 @@ export default defineConfig({
     root: resolve(import.meta.dirname, "src/renderer"),
     resolve: { alias: { ...shared, "@": resolve(import.meta.dirname, "src/renderer/src") } },
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(import.meta.dirname, "src/renderer/index.html"),
+          overlay: resolve(import.meta.dirname, "src/renderer/overlay.html"),
+        },
+      },
+    },
   },
 });
