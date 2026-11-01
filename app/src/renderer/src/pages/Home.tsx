@@ -3,12 +3,10 @@ import { Crosshair, Pencil, Radio } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StatusLight } from "@/components/ui/StatusLight";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { useProfile, useStatus } from "@/lib/engineContext";
 import { useNav } from "@/store/nav";
 import { ProfileSummary } from "./ProfileSummary";
 
-const LATER = "Arrives in a later update";
 
 export function Home() {
   const { profile } = useProfile();
@@ -27,11 +25,9 @@ export function Home() {
           It never touches the game.
         </p>
         <div className="mt-7 flex gap-3">
-          <Tooltip content={LATER} side="bottom">
-            <Button variant="primary" size="lg" icon={Radio} disabled>
-              Start Live Mode
-            </Button>
-          </Tooltip>
+          <Button variant="primary" size="lg" icon={Radio} onClick={() => go("live")}>
+            Start Live Mode
+          </Button>
           <Button size="lg" icon={Crosshair} onClick={() => go("warmup")}>
             Start Warm-up
           </Button>

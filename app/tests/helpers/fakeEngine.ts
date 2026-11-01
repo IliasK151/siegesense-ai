@@ -27,6 +27,8 @@ export class FakeEngine implements EngineLike {
     metrics: new Set(),
     flick: new Set(),
     calibration: new Set(),
+    live_event: new Set(),
+    round_summary: new Set(),
   };
   private stateCbs = new Set<(s: ConnState) => void>();
 

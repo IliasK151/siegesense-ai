@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   CalibrationState,
   Envelope,
+  HudCheckResult,
+  LiveEvent,
+  MatchSummary,
+  RoundSummary,
   Flick,
   Profile,
   ResponsePayload,
@@ -51,6 +55,13 @@ describe("protocol contract", () => {
     const summary = WarmupSummary.parse(load("warmup_summary.json").payload.data);
     expect(summary.drill?.key).toBe("overshoot");
     expect(summary.history.at(-1)?.score).toBe(summary.metrics.score);
+  });
+
+  it("live mode fixtures match their schemas", () => {
+    expect(LiveEvent.parse(load("live_event.json").payload).clip).toMatch(/\.mp4$/);
+    expect(RoundSummary.parse(load("round_summary.json").payload).died).toBe(true);
+    expect(HudCheckResult.parse(load("hud_check.json").payload.data).readers).toHaveLength(5);
+    expect(MatchSummary.parse(load("match_summary.json").payload.data).deaths).toHaveLength(1);
   });
 });
 

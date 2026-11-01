@@ -4,7 +4,9 @@ import {
   CalibrationState,
   Envelope,
   Flick,
+  LiveEvent,
   ResponsePayload,
+  RoundSummary,
   StatusPayload,
   WarmupMetrics,
 } from "@shared/protocol";
@@ -30,6 +32,8 @@ export type PushMap = {
   metrics: WarmupMetrics;
   flick: Flick;
   calibration: CalibrationState;
+  live_event: LiveEvent;
+  round_summary: RoundSummary;
 };
 export type PushType = keyof PushMap;
 const PUSH_SCHEMAS: { [K in PushType]: z.ZodType<PushMap[K]> } = {
@@ -37,6 +41,8 @@ const PUSH_SCHEMAS: { [K in PushType]: z.ZodType<PushMap[K]> } = {
   metrics: WarmupMetrics,
   flick: Flick,
   calibration: CalibrationState,
+  live_event: LiveEvent,
+  round_summary: RoundSummary,
 };
 
 export class EngineClient {
@@ -51,6 +57,8 @@ export class EngineClient {
     metrics: new Set(),
     flick: new Set(),
     calibration: new Set(),
+    live_event: new Set(),
+    round_summary: new Set(),
   };
   private stateListeners = new Set<(s: ConnState) => void>();
   private connectPromise: Promise<void> | null = null;

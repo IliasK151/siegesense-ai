@@ -179,3 +179,67 @@ export const CalibrationState = z.object({
   warning: z.string().nullable(),
 });
 export type CalibrationState = z.infer<typeof CalibrationState>;
+
+// --- Live Mode (engine/src/siegesense_engine/rounds.py, live.py, hud/reader.py) --------------
+export const LiveEvent = z.object({
+  kind: z.enum(["round_start", "phase", "kill", "death", "round_end", "repeek"]),
+  t: z.number(),
+  round: z.number().int(),
+  data: z.record(z.string(), z.unknown()).default({}),
+  confidence: z.enum(["ok", "low"]),
+  clip: z.string().nullable().default(null),
+});
+export type LiveEvent = z.infer<typeof LiveEvent>;
+
+export const RoundSummary = z.object({
+  number: z.number().int(),
+  phase_seen: z.array(z.enum(["prep", "action"])),
+  started_t: z.number(),
+  ended_t: z.number().nullable(),
+  result: z.enum(["win", "loss"]).nullable(),
+  kills: z.number().int(),
+  died: z.boolean(),
+  death_confidence: z.enum(["ok", "low"]).nullable(),
+  time_alive_s: z.number().nullable(),
+  first_blood: z.boolean(),
+  first_death: z.boolean(),
+  traded: z.boolean(),
+  traded_teammate: z.number().int(),
+  repeeks: z.number().int(),
+});
+export type RoundSummary = z.infer<typeof RoundSummary>;
+
+export const DeathInfo = z.object({
+  round: z.number().int(),
+  killer: z.string().nullable(),
+  time_alive_s: z.number().nullable(),
+  confidence: z.enum(["ok", "low"]),
+  clip: z.string().nullable(),
+});
+export type DeathInfo = z.infer<typeof DeathInfo>;
+
+export const MatchSummary = z.object({
+  id: z.number().int().nullable(),
+  started_at: z.string(),
+  ended_at: z.string(),
+  rounds: z.array(RoundSummary),
+  deaths: z.array(DeathInfo),
+});
+export type MatchSummary = z.infer<typeof MatchSummary>;
+
+export const ReaderResult = z.object({
+  key: z.string(),
+  text: z.string(),
+  confidence: z.number(),
+  ok: z.boolean(),
+});
+export type ReaderResult = z.infer<typeof ReaderResult>;
+
+export const HudCheckResult = z.object({
+  image_jpeg_b64: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+  regions: HudRegions,
+  readers: z.array(ReaderResult),
+});
+export type HudCheckResult = z.infer<typeof HudCheckResult>;

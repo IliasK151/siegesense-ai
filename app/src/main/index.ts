@@ -1,7 +1,14 @@
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, screen } from "electron";
+import { pathToFileURL } from "node:url";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, screen } from "electron";
 import { IPC, type EngineConnection, type EngineState, type FileFilter } from "../preload/api";
+import { resolveClipPath } from "./clipPath";
 import { EngineSupervisor, resolveEngineCommand } from "./engineProcess";
+
+// Death clips are served from the engine's clips folder only (see clipPath.ts).
+protocol.registerSchemesAsPrivileged([
+  { scheme: "clip", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+]);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -107,6 +114,11 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   if (!gotLock) return; // another SiegeSense is already running; it gets focused instead
+  const clipsDir = join(app.getPath("userData"), "clips");
+  protocol.handle("clip", (request) => {
+    const file = resolveClipPath(clipsDir, request.url);
+    return file ? net.fetch(pathToFileURL(file).toString()) : new Response("Not found", { status: 404 });
+  });
   createWindow();
   supervisor.start().catch(() => {
     /* state "failed" is already forwarded to the renderer */
