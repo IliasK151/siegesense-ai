@@ -16,12 +16,9 @@ export function Field({ label, hint, error, suffix, badge, className, id, ...res
   const msgId = `${inputId}-msg`;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <label htmlFor={inputId} className="text-sm font-medium text-text">
-          {label}
-        </label>
-        {badge}
-      </div>
+      <label htmlFor={inputId} className="truncate text-sm font-medium text-text">
+        {label}
+      </label>
       <div
         className={cn(
           "flex h-11 items-center rounded-xl border bg-surface-2 px-3.5 transition-colors duration-[var(--duration-fast)]",
@@ -36,6 +33,7 @@ export function Field({ label, hint, error, suffix, badge, className, id, ...res
           className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-muted/60"
           {...rest}
         />
+        {badge && <span className="ml-2 shrink-0">{badge}</span>}
         {suffix && <span className="ml-2 text-xs text-muted">{suffix}</span>}
       </div>
       {error ? (

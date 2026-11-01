@@ -44,6 +44,11 @@
   .font-mono {
     font-feature-settings: "tnum";
   }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
   ::selection {
     background: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
