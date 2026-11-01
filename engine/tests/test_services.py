@@ -231,3 +231,55 @@ async def test_reader_thread_death_turns_light_amber(fake):
                 break
     assert s["payload"]["lights"]["input"]["detail"] == "Raw input reader stopped unexpectedly"
     await ws.close()
+
+
+async def test_warmup_without_capture(fake):
+    # default server capture is unavailable off Windows: warm-up still starts, no reaction time
+    _, port, _ = fake
+    ws = await authed(port)
+    res = await request(ws, "start_warmup")
+    assert res["ok"] is True
+    m = await recv_type(ws, "metrics", timeout=2)
+    assert m["payload"]["reaction_ms"] is None and m["payload"]["reactions"] == 0
+    await ws.close()
+
+
+async def test_warmup_reaction_with_capture(tmp_path):
+    import numpy as np
+
+    from siegesense_engine.capture.frames import FakeFrameSource
+
+    frames = FakeFrameSource(size=(640, 360))
+    source = FakeInputSource()
+    store = Store(tmp_path / "s.db")
+    store.save_profile(Profile.model_validate(PROFILE))
+    server = EngineServer(
+        token=TOKEN, store=store, watcher=FakeGameWatcher(GameState(False, False)),
+        documents_dirs=[], status_interval=0.05, input_source=source,
+        metrics_interval=0.05, frame_source=frames,
+    )  # fmt: skip
+    port = await server.start(0)
+    try:
+        ws = await authed(port)
+        await request(ws, "start_warmup")
+        dark = np.full((360, 640, 3), 30, np.uint8)
+        bright = dark.copy()
+        bright[150:210, 290:350] = 230
+        for _ in range(3):  # reaction time is reported once there are 3 samples
+            for _ in range(5):
+                frames.push(dark)
+                await asyncio.sleep(0.04)
+            t_stim = time.perf_counter()
+            frames.push(bright, t_stim)
+            await asyncio.sleep(0.05)
+            source.emit(*flick_events(t_stim + 0.22))
+            await asyncio.sleep(1.0)
+        async with asyncio.timeout(4):
+            while True:
+                m = await recv_type(ws, "metrics", timeout=2)
+                if m["payload"]["reactions"] >= 3:
+                    break
+        assert 150 <= m["payload"]["reaction_ms"] <= 320
+        await ws.close()
+    finally:
+        await server.stop()

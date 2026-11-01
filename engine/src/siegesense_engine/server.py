@@ -15,6 +15,8 @@ from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
 from . import __version__
+from .capture.frames import FrameSource, UnavailableFrameSource
+from .capture.service import CaptureHub
 from .errors import RequestError
 from .game_watcher import GameWatcher
 from .gamesettings import find_game_settings, parse_game_settings
@@ -62,6 +64,7 @@ class EngineServer:
         status_interval: float = 1.0,
         input_source: InputSource | None = None,
         metrics_interval: float = 0.5,
+        frame_source: FrameSource | None = None,
     ) -> None:
         self._token = token
         self._store = store
@@ -78,8 +81,14 @@ class EngineServer:
                 self._hub.active,
             ),
         )
+        frames = frame_source or UnavailableFrameSource("Screen capture works on Windows only")
+        self._capture = CaptureHub(frames)
         self.warmup = WarmupService(
-            self._hub, store, self.broadcast, metrics_interval=metrics_interval
+            self._hub,
+            store,
+            self.broadcast,
+            metrics_interval=metrics_interval,
+            capture=self._capture,
         )
         self.calibration = CalibrationService(self._hub, self.broadcast)
         self._clients: set[ServerConnection] = set()

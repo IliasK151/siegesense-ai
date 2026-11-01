@@ -10,10 +10,14 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+import cv2
 from pydantic import BaseModel
 
 from .calibration import CalibrationSession, CalibrationState
+from .capture.frames import CaptureUnavailable
+from .capture.service import CaptureHub
 from .errors import RequestError
+from .hud.regions import crop
 from .input.events import InputEvent
 from .input.hub import InputHub
 from .input.source import InputUnavailable
@@ -41,8 +45,11 @@ class WarmupService:
         push: Push,
         clock: Callable[[], float] = time.perf_counter,
         metrics_interval: float = 0.5,
+        capture: CaptureHub | None = None,
     ) -> None:
         self._hub = hub
+        self._capture = capture
+        self._capture_unsub: Callable[[], None] | None = None
         self._store = store
         self._push = push
         self._clock = clock
@@ -65,8 +72,34 @@ class WarmupService:
         conv = conversion(profile)
         self._session = WarmupSession(conv, datetime.now(UTC), t0=self._clock())
         self._unsubscribe = self._hub.subscribe(self._on_batch)
+        self._start_capture(profile)
         self._ticker = asyncio.create_task(self._tick_loop())
         return {"conversion": conv.source}
+
+    def _start_capture(self, profile) -> None:
+        """Reaction time needs the screen; warm-up works without it."""
+        if self._capture is None:
+            return
+        try:
+            self._capture.acquire(profile.capture_fps)
+        except CaptureUnavailable:
+            return
+        box = profile.hud_regions.centre
+        session = self._session
+
+        def on_frame(frame) -> None:
+            centre = cv2.cvtColor(crop(frame.image, box), cv2.COLOR_BGR2GRAY)
+            if session is not None:
+                session.frame(frame.t, cv2.resize(centre, (64, 64), interpolation=cv2.INTER_AREA))
+
+        self._capture_unsub = self._capture.subscribe(on_frame, every_frame=True)
+
+    def _stop_capture(self) -> None:
+        if self._capture_unsub is not None:
+            self._capture_unsub()
+            self._capture_unsub = None
+            if self._capture is not None:
+                self._capture.release()
 
     def _on_batch(self, events: list[InputEvent]) -> None:
         if self._session is not None:
@@ -105,6 +138,7 @@ class WarmupService:
         if self._unsubscribe:
             self._unsubscribe()
         self._hub.release()
+        self._stop_capture()
 
         history = await asyncio.to_thread(self._store.recent_warmups, 7)
         summary = summarize(metrics, session.started_at, end - session.t0, history)
@@ -157,6 +191,31 @@ class CalibrationService:
     @staticmethod
     def _shape(s: CalibrationState) -> tuple:
         return (s.phase, tuple(s.runs), s.warning)
+
+    def _start_capture(self, profile) -> None:
+        """Reaction time needs the screen; warm-up works without it."""
+        if self._capture is None:
+            return
+        try:
+            self._capture.acquire(profile.capture_fps)
+        except CaptureUnavailable:
+            return
+        box = profile.hud_regions.centre
+        session = self._session
+
+        def on_frame(frame) -> None:
+            centre = cv2.cvtColor(crop(frame.image, box), cv2.COLOR_BGR2GRAY)
+            if session is not None:
+                session.frame(frame.t, cv2.resize(centre, (64, 64), interpolation=cv2.INTER_AREA))
+
+        self._capture_unsub = self._capture.subscribe(on_frame, every_frame=True)
+
+    def _stop_capture(self) -> None:
+        if self._capture_unsub is not None:
+            self._capture_unsub()
+            self._capture_unsub = None
+            if self._capture is not None:
+                self._capture.release()
 
     def _on_batch(self, events: list[InputEvent]) -> None:
         session = self._session

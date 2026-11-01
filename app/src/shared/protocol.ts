@@ -129,6 +129,8 @@ export const WarmupMetrics = z.object({
   strafe_switches: z.number().int(),
   crouch_spams: z.number().int(),
   ads_jitter_per_s: z.number(),
+  reaction_ms: z.number().nullable().default(null),
+  reactions: z.number().int().default(0),
   score: z.number().int().nullable(),
   conversion: Conversion,
 });

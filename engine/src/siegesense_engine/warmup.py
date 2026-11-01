@@ -11,6 +11,7 @@ from .input.events import Button, InputEvent, Key, MouseMove
 from .mechanics.flicks import Flick, FlickConfig, FlickDetector
 from .mechanics.habits import HabitTracker
 from .mechanics.sensitivity import Conversion
+from .reaction import ReactionTimer
 
 MIN_FLICKS_FOR_SCORE = 5
 MIN_FLICKS_FOR_DRILL = 10
@@ -36,13 +37,15 @@ class WarmupMetrics(BaseModel):
     strafe_switches: int
     crouch_spams: int
     ads_jitter_per_s: float
+    reaction_ms: float | None = None
+    reactions: int = 0
     score: int | None
     conversion: Literal["calibrated", "estimated"]
 
     @classmethod
     def empty(cls, conversion: Literal["calibrated", "estimated"]) -> WarmupMetrics:
         zero = {name: 0 for name in cls.model_fields}
-        return cls(**{**zero, "score": None, "conversion": conversion})
+        return cls(**{**zero, "score": None, "reaction_ms": None, "conversion": conversion})
 
 
 class FlickOut(BaseModel):
@@ -186,6 +189,7 @@ class WarmupSession:
         self.t0 = t0
         self._flicks = FlickDetector(flick_config)
         self._habits = HabitTracker()
+        self._reaction = ReactionTimer()
         self._done: list[FlickOut] = []
 
     def feed(self, events: list[InputEvent]) -> None:
@@ -194,6 +198,7 @@ class WarmupSession:
                 dx, dy = e.dx * self.conversion.yaw, e.dy * self.conversion.pitch
                 self._flicks.move(e.t, dx, dy)
                 self._habits.move(e.t, dx, dy)
+                self._reaction.moved(e.t, abs(dx) + abs(dy))
             elif isinstance(e, Button):
                 if e.button == "left" and e.down:
                     self._flicks.shot(e.t)
@@ -201,8 +206,15 @@ class WarmupSession:
             elif isinstance(e, Key):
                 self._habits.key(e.t, e.vk, e.down)
 
+    def frame(self, t: float, centre_gray) -> None:
+        """A downscaled grey crop of the screen centre (from screen capture, if available)."""
+        self._reaction.frame(t, centre_gray)
+
     def poll(self, now: float) -> list[FlickOut]:
-        new = [_flick_out(len(self._done) + i + 1, f) for i, f in enumerate(self._flicks.poll(now))]
+        flicks = self._flicks.poll(now)
+        for f in flicks:
+            self._reaction.flick_onset(f.t_onset)
+        new = [_flick_out(len(self._done) + i + 1, f) for i, f in enumerate(flicks)]
         self._done.extend(new)
         return new
 
@@ -231,6 +243,8 @@ class WarmupSession:
             strafe_switches=h.strafe_switches,
             crouch_spams=h.crouch_spams,
             ads_jitter_per_s=round(h.ads_jitter / h.ads_seconds, 2) if h.ads_seconds else 0.0,
+            reaction_ms=self._reaction.median_ms(),
+            reactions=len(self._reaction.samples()),
             score=compute_score(n, over_rate, corr_rate),
             conversion=self.conversion.source,
         )

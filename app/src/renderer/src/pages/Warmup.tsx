@@ -163,6 +163,12 @@ export function Warmup() {
             <MetricTile label="Avg flick speed" value={`${Math.round(m?.avg_peak_speed ?? 0)}°/s`} />
             <MetricTile label="Shots while moving" value={pct(m?.moving_shot_rate ?? 0)} />
             <MetricTile label="ADS jitter" value={`${(m?.ads_jitter_per_s ?? 0).toFixed(1)}/s`} />
+            <MetricTile
+              label="Reaction"
+              value={m?.reaction_ms != null ? `${Math.round(m.reaction_ms)} ms` : "—"}
+              hint={m?.reaction_ms != null ? `${m.reactions} samples` : "Needs screen capture · 3 samples"}
+              testId="tile-reaction"
+            />
           </div>
           <div className="grid grid-cols-5 gap-5">
             <Card title="Last flick" className="col-span-3">

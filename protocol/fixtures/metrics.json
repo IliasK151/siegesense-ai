@@ -19,6 +19,8 @@
   "strafe_switches": 0,
   "crouch_spams": 0,
   "ads_jitter_per_s": 0.0,
+  "reaction_ms": null,
+  "reactions": 0,
   "score": 58,
   "conversion": "estimated"
  }

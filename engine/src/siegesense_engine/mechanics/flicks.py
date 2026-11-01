@@ -31,6 +31,7 @@ class FlickConfig:
 @dataclass
 class Flick:
     t_peak: float
+    t_onset: float
     amplitude: float
     peak_speed: float
     duration_ms: float
@@ -192,6 +193,7 @@ class FlickDetector:
         t_peak = (cand.peak_idx + 0.5) * cfg.bin_s
         flick = Flick(
             t_peak=t_peak,
+            t_onset=onset_idx * cfg.bin_s,
             amplitude=amplitude,
             peak_speed=cand.peak_speed,
             duration_ms=(end_idx - onset_idx) * cfg.bin_s * 1000,

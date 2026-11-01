@@ -45,6 +45,7 @@ class CaptureService:
         self._guard_window = guard_window
         self._recover_after = recover_after
         self._subscribers: list[Subscriber] = []
+        self._every_frame: list[Subscriber] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -57,13 +58,15 @@ class CaptureService:
         self._restart_fps: int | None = None
 
     # -- subscribers -------------------------------------------------------------------
-    def subscribe(self, cb: Subscriber) -> Callable[[], None]:
+    def subscribe(self, cb: Subscriber, every_frame: bool = False) -> Callable[[], None]:
+        """HUD consumers get frames at the HUD rate; cheap ``every_frame`` consumers get all."""
+        target = self._every_frame if every_frame else self._subscribers
         with self._lock:
-            self._subscribers.append(cb)
+            target.append(cb)
 
         def unsubscribe() -> None:
             with self._lock, contextlib.suppress(ValueError):
-                self._subscribers.remove(cb)
+                target.remove(cb)
 
         return unsubscribe
 
@@ -110,19 +113,20 @@ class CaptureService:
                     self.ring.add(frame)
                 except Exception:
                     log.exception("ring buffer add failed")
+                self._dispatch(frame, self._every_frame)
                 if frame.t - last_hud >= 1.0 / self._hud_hz:
                     last_hud = frame.t
                     start = time.perf_counter()
-                    self._dispatch(frame)
+                    self._dispatch(frame, self._subscribers)
                     self._work.append((start, time.perf_counter() - start))
             now = time.perf_counter()
             if now - last_guard >= min(1.0, self._guard_window / 3):
                 last_guard = now
                 self._guard(now)
 
-    def _dispatch(self, frame: Frame) -> None:
+    def _dispatch(self, frame: Frame, targets: list[Subscriber]) -> None:
         with self._lock:
-            subscribers = list(self._subscribers)
+            subscribers = list(targets)
         for cb in subscribers:
             try:
                 cb(frame)
@@ -177,8 +181,8 @@ class CaptureHub:
     def ring(self) -> FrameRing:
         return self.service.ring
 
-    def subscribe(self, cb: Subscriber) -> Callable[[], None]:
-        return self.service.subscribe(cb)
+    def subscribe(self, cb: Subscriber, every_frame: bool = False) -> Callable[[], None]:
+        return self.service.subscribe(cb, every_frame)
 
     def acquire(self, fps: int = 30) -> None:
         if self._refs == 0:

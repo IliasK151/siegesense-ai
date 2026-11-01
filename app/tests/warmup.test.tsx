@@ -54,6 +54,9 @@ describe("Warm-up page", () => {
     expect(screen.getByTestId("tile-score")).toHaveTextContent("58");
     expect(screen.getByTestId("tile-flicks")).toHaveTextContent("12");
     expect(screen.getByTestId("tile-overshoot")).toHaveTextContent("42%");
+    expect(screen.getByTestId("tile-reaction")).toHaveTextContent("—");
+    act(() => engine.emit("metrics", { ...metricsFixture(), reaction_ms: 231.4, reactions: 4 }));
+    expect(screen.getByTestId("tile-reaction")).toHaveTextContent("231 ms");
   });
 
   it("flick push adds tagged row and chart", async () => {
