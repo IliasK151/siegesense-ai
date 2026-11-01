@@ -3,14 +3,14 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
 
-const shared = { "@shared": resolve(__dirname, "src/shared") };
+const shared = { "@shared": resolve(import.meta.dirname, "src/shared") };
 
 export default defineConfig({
   main: { resolve: { alias: shared } },
   preload: { resolve: { alias: shared } },
   renderer: {
-    root: resolve(__dirname, "src/renderer"),
-    resolve: { alias: { ...shared, "@": resolve(__dirname, "src/renderer/src") } },
+    root: resolve(import.meta.dirname, "src/renderer"),
+    resolve: { alias: { ...shared, "@": resolve(import.meta.dirname, "src/renderer/src") } },
     plugins: [react(), tailwindcss()],
   },
 });

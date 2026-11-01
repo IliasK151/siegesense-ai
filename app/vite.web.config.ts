@@ -5,11 +5,11 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: resolve(__dirname, "src/renderer"),
+  root: resolve(import.meta.dirname, "src/renderer"),
   resolve: {
     alias: {
-      "@shared": resolve(__dirname, "src/shared"),
-      "@": resolve(__dirname, "src/renderer/src"),
+      "@shared": resolve(import.meta.dirname, "src/shared"),
+      "@": resolve(import.meta.dirname, "src/renderer/src"),
     },
   },
   plugins: [react(), tailwindcss()],
