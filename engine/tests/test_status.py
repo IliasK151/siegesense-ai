@@ -47,7 +47,7 @@ def test_running_background_ok():
 
 def test_unbuilt_lights_off():
     lights = board().compute().lights
-    for key in ("capture", "hud", "coach", "voice"):
+    for key in ("coach", "voice"):
         assert lights[key].state == "off"
         assert lights[key].detail == "Arrives in a later update"
 

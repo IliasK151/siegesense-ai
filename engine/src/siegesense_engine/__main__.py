@@ -15,6 +15,7 @@ import sys
 import threading
 from pathlib import Path
 
+from .capture.frames import VideoFileSource, default_frame_source
 from .game_watcher import default_game_watcher
 from .gamesettings import default_documents_dirs
 from .input.source import ReplayInputSource, default_input_source
@@ -29,6 +30,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--documents-dir", action="append", type=Path, default=None)
     parser.add_argument("--replay-input", type=Path, default=None, help="replay a JSONL input file")
+    parser.add_argument("--replay-video", type=Path, default=None, help="use a video as the screen")
     return parser.parse_args(argv)
 
 
@@ -58,6 +60,9 @@ async def _run(args: argparse.Namespace) -> None:
         documents_dirs=args.documents_dir or default_documents_dirs(),
         input_source=(
             ReplayInputSource(args.replay_input) if args.replay_input else default_input_source()
+        ),
+        frame_source=(
+            VideoFileSource(args.replay_video) if args.replay_video else default_frame_source()
         ),
     )
     port = await server.start(args.port)

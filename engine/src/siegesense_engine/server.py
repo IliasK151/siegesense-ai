@@ -20,8 +20,10 @@ from .capture.service import CaptureHub
 from .errors import RequestError
 from .game_watcher import GameWatcher
 from .gamesettings import find_game_settings, parse_game_settings
+from .hud.ocr import OcrEngine, RapidOcrEngine
 from .input.hub import InputHub
 from .input.source import InputSource, UnavailableInputSource
+from .live import LiveService
 from .profile import Profile
 from .protocol import (
     LIGHT_KEYS,
@@ -65,6 +67,8 @@ class EngineServer:
         input_source: InputSource | None = None,
         metrics_interval: float = 0.5,
         frame_source: FrameSource | None = None,
+        ocr: OcrEngine | None = None,
+        clips_dir: Path | None = None,
     ) -> None:
         self._token = token
         self._store = store
@@ -72,15 +76,7 @@ class EngineServer:
         self._status_interval = status_interval
         source = input_source or UnavailableInputSource("Input tracking works on Windows only")
         self._hub = InputHub(source)
-        self._board = StatusBoard(
-            watcher,
-            store.get_profile,
-            lambda: (
-                source.available and self._hub.error is None,
-                self._hub.error or source.reason,
-                self._hub.active,
-            ),
-        )
+        self._input_source = source
         frames = frame_source or UnavailableFrameSource("Screen capture works on Windows only")
         self._capture = CaptureHub(frames)
         self.warmup = WarmupService(
@@ -91,6 +87,37 @@ class EngineServer:
             capture=self._capture,
         )
         self.calibration = CalibrationService(self._hub, self.broadcast)
+        shared_ocr: list[OcrEngine] = [ocr] if ocr is not None else []
+
+        def ocr_factory() -> OcrEngine:
+            if not shared_ocr:
+                engine = RapidOcrEngine()
+                engine.warm_up()
+                shared_ocr.append(engine)
+            return shared_ocr[0]
+
+        self.live = LiveService(
+            self._capture,
+            self._hub,
+            store,
+            self.broadcast,
+            ocr_factory,
+            clips_dir or Path(store.path).parent / "clips",
+        )
+        capture = self._capture
+        self._board = StatusBoard(
+            watcher,
+            store.get_profile,
+            self._board_input_state,
+            lambda: (
+                frames.available and capture.error is None,
+                capture.error or frames.reason,
+                capture.active,
+                capture.service.stats().fps_target,
+                capture.service.stats().behind,
+            ),
+            lambda: (self.live.running, self.live.hud_low),
+        )
         self._clients: set[ServerConnection] = set()
         self._server: Server | None = None
         self._ticker: asyncio.Task | None = None
@@ -105,7 +132,20 @@ class EngineServer:
             "get_warmup_history": self.warmup.history,
             "start_calibration": self.calibration.start,
             "cancel_calibration": self.calibration.cancel,
+            "start_live": self.live.start,
+            "stop_live": self.live.stop,
+            "hud_check": self.live.hud_check,
+            "hud_check_file": self.live.hud_check_file,
+            "get_clip_dir": self.live.clip_dir,
         }
+
+    def _board_input_state(self) -> tuple[bool, str | None, bool]:
+        source = self._input_source
+        return (
+            source.available and self._hub.error is None,
+            self._hub.error or source.reason,
+            self._hub.active,
+        )
 
     # -- lifecycle -------------------------------------------------------------------------
     async def start(self, port: int = 0) -> int:
@@ -121,6 +161,7 @@ class EngineServer:
 
     async def stop(self) -> None:
         await self.warmup.shutdown()
+        await self.live.shutdown()
         await self.calibration.cancel()
         if self._ticker:
             self._ticker.cancel()

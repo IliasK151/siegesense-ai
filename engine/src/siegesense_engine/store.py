@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -31,12 +32,28 @@ MIGRATIONS: list[str] = [
         summary TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE matches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        summary TEXT NOT NULL
+    );
+    CREATE TABLE events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL REFERENCES matches(id),
+        t REAL NOT NULL,
+        kind TEXT NOT NULL,
+        data TEXT NOT NULL
+    );
+    """,
 ]
 
 
 class Store:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
         self._lock = threading.Lock()
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._migrate()
@@ -95,6 +112,30 @@ class Store:
                 (limit,),
             ).fetchall()
         return [HistoryPoint(started_at=r[0], score=r[1]) for r in reversed(rows)]
+
+    def add_match(self, started_at: str, ended_at: str, summary: dict, events: list[dict]) -> int:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO matches (started_at, ended_at, summary) VALUES (?, ?, ?)",
+                (started_at, ended_at, json.dumps(summary)),
+            )
+            match_id = int(cur.lastrowid)
+            self._db.executemany(
+                "INSERT INTO events (match_id, t, kind, data) VALUES (?, ?, ?, ?)",
+                [(match_id, e["t"], e["kind"], json.dumps(e.get("data", {}))) for e in events],
+            )
+            return match_id
+
+    def recent_matches(self, limit: int = 20) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, started_at, ended_at, summary FROM matches ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {"id": r[0], "started_at": r[1], "ended_at": r[2], "summary": json.loads(r[3])}
+            for r in rows
+        ]
 
     def close(self) -> None:
         with self._lock:
