@@ -10,6 +10,7 @@ export interface SiegeSenseApi {
   getEngine(): Promise<EngineConnection>;
   onEngineState(cb: (s: EngineState) => void): () => void;
   pickFile(filters?: FileFilter[]): Promise<string | null>;
+  setOverlayVisible(visible: boolean): void;
   platform: string;
 }
 
@@ -17,4 +18,5 @@ export const IPC = {
   engineGet: "engine:get",
   engineState: "engine:state",
   pickFile: "dialog:pickFile",
+  overlaySet: "overlay:set",
 } as const;

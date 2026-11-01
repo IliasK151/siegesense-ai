@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Page = "home" | "live" | "review" | "progress" | "settings" | "setup";
+export type Page = "home" | "warmup" | "live" | "review" | "progress" | "settings" | "setup";
 
 type NavState = { page: Page; go: (page: Page) => void };
 

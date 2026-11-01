@@ -7,12 +7,14 @@ import { type EngineLike, EngineProvider, useProfile } from "@/lib/engineContext
 import { Home } from "@/pages/Home";
 import { Live, Progress, Review } from "@/pages/Placeholders";
 import { Settings } from "@/pages/Settings";
+import { Warmup } from "@/pages/Warmup";
 import { SetupWizard } from "@/pages/setup/SetupWizard";
 import { type Page, useNav } from "@/store/nav";
 import type { SiegeSenseApi } from "../../preload/api";
 
 const pages: Record<Exclude<Page, "setup">, () => React.JSX.Element> = {
   home: Home,
+  warmup: Warmup,
   live: Live,
   review: Review,
   progress: Progress,

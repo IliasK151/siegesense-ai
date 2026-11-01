@@ -1,5 +1,5 @@
 import { LIGHT_KEYS } from "@shared/protocol";
-import { ChartLine, Clapperboard, House, type LucideIcon, Radio, Settings } from "lucide-react";
+import { ChartLine, Clapperboard, Crosshair, House, type LucideIcon, Radio, Settings } from "lucide-react";
 import { StatusLight } from "@/components/ui/StatusLight";
 import { cn } from "@/lib/cn";
 import { useStatus } from "@/lib/engineContext";
@@ -7,6 +7,7 @@ import { type Page, useNav } from "@/store/nav";
 
 const items: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "home", label: "Home", icon: House },
+  { page: "warmup", label: "Warm-up", icon: Crosshair },
   { page: "live", label: "Live", icon: Radio },
   { page: "review", label: "Review", icon: Clapperboard },
   { page: "progress", label: "Progress", icon: ChartLine },

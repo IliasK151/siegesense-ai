@@ -9,6 +9,7 @@ const api: SiegeSenseApi = {
     return () => ipcRenderer.removeListener(IPC.engineState, listener);
   },
   pickFile: (filters?: FileFilter[]) => ipcRenderer.invoke(IPC.pickFile, filters),
+  setOverlayVisible: (visible: boolean) => ipcRenderer.send(IPC.overlaySet, visible),
   platform: process.platform,
 };
 

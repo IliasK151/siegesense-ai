@@ -32,11 +32,9 @@ export function Home() {
               Start Live Mode
             </Button>
           </Tooltip>
-          <Tooltip content={LATER} side="bottom">
-            <Button size="lg" icon={Crosshair} disabled>
-              Start Warm-up
-            </Button>
-          </Tooltip>
+          <Button size="lg" icon={Crosshair} onClick={() => go("warmup")}>
+            Start Warm-up
+          </Button>
         </div>
       </section>
 
