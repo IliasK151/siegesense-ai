@@ -1,0 +1,65 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Design tokens: the only place colours, fonts and timings are defined. */
+@theme {
+  --color-bg: #0a0c0f;
+  --color-surface: #111419;
+  --color-surface-2: #181c23;
+  --color-border: #242a33;
+  --color-text: #e7ebf0;
+  --color-muted: #8a94a3;
+  --color-accent: #ff6a1a;
+  --color-accent-strong: #ff8640;
+  --color-ok: #22c55e;
+  --color-warn: #f5a524;
+  --color-error: #f04438;
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --radius-card: 14px;
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  input {
+    user-select: text;
+  }
+  .font-mono {
+    font-feature-settings: "tnum";
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 999px;
+    border: 3px solid var(--color-bg);
+  }
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}

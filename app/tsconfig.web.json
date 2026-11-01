@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client", "@testing-library/jest-dom"]
+  },
+  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/api.ts", "tests/**/*"],
+  "exclude": ["tests/engineProcess.test.ts"]
+}
