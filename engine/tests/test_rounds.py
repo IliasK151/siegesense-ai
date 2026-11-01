@@ -145,3 +145,75 @@ def test_no_false_death_on_teammate_kill():
     s.run(0.1, countdown(179, s.t), kills=[kill("Bandit.X", "Sledge", "orange", "blue")])
     s.run(5, countdown(179, s.t), health=None)  # e.g. health unreadable for a moment
     assert "death" not in s.kinds()
+
+
+def test_single_timer_misread_is_ignored():
+    s = Script()
+    s.run(2, countdown(150, 0))
+    s.run(0.1, lambda t: 170)  # OCR misread 2:30 → 2:50 for one frame
+    s.run(2, countdown(148, s.t))
+    assert [r.number for r in s.rt.rounds()] == [1]
+    assert "round_end" not in s.kinds()
+
+
+def test_single_score_misread_is_ignored():
+    s = Script()
+    s.run(2, countdown(150, 0), score=(2, 1))
+    s.run(0.1, countdown(148, s.t), score=(3, 1))  # one bad read
+    s.run(2, countdown(148, s.t), score=(2, 1))
+    assert "round_end" not in s.kinds()
+
+
+def test_score_change_confirmed_by_two_readings():
+    s = Script()
+    s.run(2, countdown(150, 0), score=(2, 1))
+    s.run(1, lambda t: None, score=(3, 1))
+    assert s.rt.rounds()[0].result == "win"
+
+
+def test_post_plant_death_still_counts():
+    s = Script()
+    s.run(2, countdown(60, 0))  # action
+    s.run(10, lambda t: None)  # bomb planted: timer replaced by the defuser icon
+    s.run(0.1, lambda t: None, kills=[kill("Bandit.X", ME, "orange", "blue")])
+    s.run(2, lambda t: None, health=None)
+    assert "round_end" not in s.kinds()
+    deaths = [e for e in s.events if e.kind == "death"]
+    assert len(deaths) == 1 and deaths[0].confidence == "ok"
+    s.run(1, lambda t: None, health=None, score=(0, 1))
+    assert s.rt.rounds()[0].result == "loss" and s.rt.rounds()[0].died
+
+
+def test_defuser_countdown_is_not_a_new_round():
+    s = Script()
+    s.run(2, countdown(30, 0))  # action, 0:30 left
+    s.run(3, countdown(45, s.t))  # plant: 0:45 defuser countdown appears
+    assert [r.number for r in s.rt.rounds()] == [1]
+
+
+def test_short_name_with_one_ocr_error_is_me():
+    rt = RoundTracker("Bob")
+    s = Script()
+    s.rt = rt
+    s.run(1, countdown(150, 0))
+    k = KillEntryModel(
+        killer="B0b",
+        victim="Thermite",
+        killer_team="blue",
+        victim_team="orange",
+        killer_is_me=True,
+        victim_is_me=False,
+        headshot=None,
+        confidence=0.9,
+    )
+    s.run(0.1, countdown(149, s.t), kills=[k])
+    assert rt.rounds()[0].kills == 1
+
+
+def test_same_victim_counted_once_per_round():
+    s = Script()
+    s.run(1, countdown(150, 0))
+    s.run(0.1, countdown(149, s.t), kills=[kill(ME, "Thermite_1", "blue", "orange")])
+    s.run(0.5, countdown(149, s.t))
+    s.run(0.1, countdown(148, s.t), kills=[kill(ME, "Thermite_l", "blue", "orange")])  # OCR flicker
+    assert s.rt.rounds()[0].kills == 1

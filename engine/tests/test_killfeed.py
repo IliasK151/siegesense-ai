@@ -87,3 +87,33 @@ def test_unchanged_crop_skips_ocr():
 def test_empty_feed():
     reader = KillFeedReader(_fake_names(), "Ash.Main")
     assert reader.read(feed([]), 1.0) == []
+
+
+def test_short_names_fuzzy():
+    from siegesense_engine.hud.names import same_name
+
+    assert same_name("Bob", "B0b")
+    assert same_name("Kenji", "Kenjl")
+    assert same_name("Raptor", "Rapt0r")
+    assert not same_name("Bob", "Rob1")
+    assert not same_name("Ash", "Bandit")
+    assert same_name("Ash.Main", "Ash.Maln")
+    assert not same_name("Ash.Main", "Ash")
+
+
+def test_bright_background_still_segments():
+    img = feed_bright([ME_KILLS])
+    lines = segment_lines(img)
+    assert len(lines) == 1
+    assert lines[0][1] - lines[0][0] < 60
+
+
+def test_garbage_entries_dropped():
+    reader = KillFeedReader(FakeOcr(lambda img: ("—", 0.4)), "Ash.Main")
+    assert reader.read(feed([ME_KILLS]), 1.0) == []
+
+
+def feed_bright(kills):
+    from hudsynth import render_bright
+
+    return crop(render_bright({"kills": kills}), R.killfeed)
