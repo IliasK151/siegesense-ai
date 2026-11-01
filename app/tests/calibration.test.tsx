@@ -89,7 +89,8 @@ describe("CalibrationPanel", () => {
 describe("aim helpers", () => {
   it("estimates counts and cm per 360", () => {
     const p = { ...profileFixture(), yaw_sensitivity: 10, mouse_multiplier_unit: 0.02, dpi: 800 };
-    expect(estimatedCountsPer360(p)).toBeCloseTo(360 / 0.0114591559, 0);
+    expect(estimatedCountsPer360(p)).toBeCloseTo(360 / 0.0572957795, 0);
+    expect(cmPer360(p)).toBeCloseTo(19.95, 1);
     expect(cmPer360({ ...p, counts_per_360: 36000 })).toBeCloseTo(114.3, 1);
   });
 });
