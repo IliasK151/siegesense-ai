@@ -163,3 +163,59 @@ async def test_status_push_on_change(engine):
     status = await recv_type(ws, "status")
     assert status["payload"]["lights"]["game"]["state"] == "ok"
     await ws.close()
+
+
+class FlakyWatcher(FakeGameWatcher):
+    """Raises on the polls listed in fail_on, otherwise returns state."""
+
+    def __init__(self, fail_on: set[int]):
+        super().__init__(GameState(False, False))
+        self.calls = 0
+        self.fail_on = fail_on
+
+    def poll(self):
+        self.calls += 1
+        if self.calls in self.fail_on:
+            raise RuntimeError("psutil exploded")
+        return self.state
+
+
+async def test_status_loop_survives_watcher_error(tmp_path):
+    watcher = FlakyWatcher(fail_on={2, 3})
+    server = EngineServer(
+        token=TOKEN,
+        store=Store(tmp_path / "s.db"),
+        watcher=watcher,
+        documents_dirs=[],
+        status_interval=0.05,
+    )
+    port = await server.start(0)
+    try:
+        ws = await authed(port)
+        await recv_type(ws, "status")
+        watcher.state = GameState(True, True)
+        seen = []
+        while not seen or seen[-1] != "ok":
+            status = await recv_type(ws, "status")
+            seen.append(status["payload"]["lights"]["game"]["state"])
+        assert "error" in seen  # the failure was shown, then the ticker recovered
+        await ws.close()
+    finally:
+        await server.stop()
+
+
+async def test_connect_survives_watcher_error(tmp_path):
+    server = EngineServer(
+        token=TOKEN,
+        store=Store(tmp_path / "s.db"),
+        watcher=FlakyWatcher(fail_on={1}),
+        documents_dirs=[],
+        status_interval=10,
+    )
+    port = await server.start(0)
+    try:
+        ws = await authed(port)
+        assert (await request(ws, "get_profile"))["ok"] is True
+        await ws.close()
+    finally:
+        await server.stop()

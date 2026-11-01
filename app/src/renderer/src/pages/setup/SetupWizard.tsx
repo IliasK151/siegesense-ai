@@ -7,7 +7,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { EngineError } from "@/lib/engineClient";
 import { useEngine, useProfile } from "@/lib/engineContext";
 import { useNav } from "@/store/nav";
-import { type ProfileDraft, stepIsValid, WIZARD_STEPS, type WizardStep } from "./draft";
+import { type ProfileDraft, sanitizeImport, stepIsValid, WIZARD_STEPS, type WizardStep } from "./draft";
 import type { ImportInfo } from "./ImportBadge";
 import { StepDisplay } from "./StepDisplay";
 import { StepDone } from "./StepDone";
@@ -30,8 +30,16 @@ export function SetupWizard() {
 
   const update = (d: ProfileDraft) => setDraft((prev) => ({ ...prev, ...d }));
   const onImported = (r: GameSettingsImport) => {
-    setDraft((prev) => ({ ...prev, ...r.values }));
-    setImportInfo({ imported: new Set(Object.keys(r.values)), missing: new Set(r.missing) });
+    const { values, missing } = sanitizeImport(r.values, r.missing);
+    setDraft((prev) => {
+      const next = { ...prev, ...values };
+      // Clear fields the file had with invalid values; keep anything the file simply lacked.
+      for (const field of Object.keys(r.values)) {
+        if (!(field in values)) delete next[field as keyof ProfileDraft];
+      }
+      return next;
+    });
+    setImportInfo({ imported: new Set(Object.keys(values)), missing: new Set(missing) });
   };
 
   const gate = VALIDATED[step];

@@ -115,4 +115,20 @@ describe("EngineClient", () => {
     await expect(c.request("get_status")).rejects.toMatchObject({ code: "disconnected" });
     c.close();
   });
+
+  it("does not multiply reconnect loops when hello is rejected", async () => {
+    let connections = 0;
+    server.removeAllListeners("connection");
+    server.on("connection", (ws) => {
+      connections += 1;
+      ws.on("message", () => ws.close(4401, "unauthorized"));
+    });
+    const c = client({ backoffMs: [20] });
+    void c.connect();
+    await new Promise((r) => setTimeout(r, 300));
+    c.close();
+    // One loop at 20 ms backoff makes ~10-15 attempts in 300 ms; multiplying loops make hundreds.
+    expect(connections).toBeLessThan(25);
+  });
 });
+

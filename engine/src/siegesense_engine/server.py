@@ -17,7 +17,17 @@ from . import __version__
 from .game_watcher import GameWatcher
 from .gamesettings import find_game_settings, parse_game_settings
 from .profile import Profile
-from .protocol import Envelope, ProtocolError, error_response, make, parse, response
+from .protocol import (
+    LIGHT_KEYS,
+    Envelope,
+    Light,
+    ProtocolError,
+    StatusPayload,
+    error_response,
+    make,
+    parse,
+    response,
+)
 from .status import StatusBoard
 from .store import Store
 
@@ -129,8 +139,26 @@ class EngineServer:
             return error_response(rid, "internal", str(exc))
 
     # -- status ----------------------------------------------------------------------------
+    def _safe_compute(self) -> StatusPayload:
+        """Never let a failing status check kill the ticker or a new connection."""
+        try:
+            return self._board.compute()
+        except Exception as exc:
+            log.exception("status check failed")
+            lights = {
+                key: Light(state="off", label=key.title(), detail="Status unavailable")
+                for key in LIGHT_KEYS
+            }
+            lights["game"] = Light(
+                state="error",
+                label="Status check failed",
+                detail=str(exc) or type(exc).__name__,
+                fix="It will retry automatically. Restart SiegeSense if this stays red.",
+            )
+            return StatusPayload(lights=lights)
+
     async def _status_message(self) -> str:
-        status = await asyncio.to_thread(self._board.compute)
+        status = await asyncio.to_thread(self._safe_compute)
         self._last_status = status.model_dump_json()
         return make("status", status)
 
@@ -171,5 +199,5 @@ class EngineServer:
         return {"values": result.values, "missing": result.missing, "source": result.source}
 
     async def _get_status(self, _: dict[str, Any]) -> dict[str, Any]:
-        status = await asyncio.to_thread(self._board.compute)
+        status = await asyncio.to_thread(self._safe_compute)
         return status.model_dump(mode="json")

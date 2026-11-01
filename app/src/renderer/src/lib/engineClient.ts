@@ -130,15 +130,22 @@ export class EngineClient {
       ws.onclose = () => reject(new Error("socket closed"));
     });
     ws.onmessage = (ev) => this.onMessage(String(ev.data));
-    ws.onclose = () => this.onClose(ws);
     ws.onerror = () => {};
-    this.ws = ws;
+    // During the handshake a close only fails this attempt; the caller's loop retries.
+    // The socket becomes the live connection (with reconnect-on-close) only after hello succeeds.
+    const closed = new Promise<never>((_, reject) => {
+      ws.onclose = () => reject(new EngineError("disconnected", "Engine closed the connection during hello."));
+    });
     try {
-      await this.send(ws, "hello", { token });
+      await Promise.race([this.send(ws, "hello", { token }), closed]);
     } catch (err) {
+      ws.onclose = null;
       ws.close();
+      this.failPending();
       throw err;
     }
+    ws.onclose = () => this.onClose(ws);
+    this.ws = ws;
   }
 
   private onMessage(raw: string): void {

@@ -48,3 +48,15 @@ export function toNumber(raw: string): number | undefined {
   const n = Number(raw);
   return Number.isFinite(n) ? n : undefined;
 }
+
+/** Keep only imported values that pass validation; the rest are reported as missing. */
+export function sanitizeImport(values: ProfileDraft, missing: string[]): { values: ProfileDraft; missing: string[] } {
+  const kept: Record<string, unknown> = {};
+  const dropped: string[] = [];
+  for (const [field, value] of Object.entries(values)) {
+    const schema = profileFields[field as ProfileField];
+    if (schema?.safeParse(value).success) kept[field] = value;
+    else dropped.push(field);
+  }
+  return { values: kept as ProfileDraft, missing: [...new Set([...missing, ...dropped])] };
+}

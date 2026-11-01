@@ -154,4 +154,26 @@ describe("setup wizard", () => {
     await user.click(next());
     expect(screen.getByLabelText("Mouse DPI")).toHaveValue(800);
   });
+
+  it("drops invalid imported values instead of blocking save", async () => {
+    const engine = firstRun({
+      values: { ...IMPORTED.values, mouse_multiplier_unit: 5, fov: 120 } as typeof IMPORTED.values,
+      missing: [],
+    });
+    await toSensitivity();
+    await user.click(await screen.findByRole("button", { name: "Import" }));
+    await user.type(screen.getByLabelText("Mouse DPI"), "800");
+    await user.click(next());
+    const fov = screen.getByLabelText("Field of view");
+    expect(fov).toHaveValue(null);
+    expect(within(fov.closest("div")!.parentElement!).getByText("Not found — enter manually")).toBeInTheDocument();
+    await user.type(fov, "84");
+    await user.click(next());
+    await user.click(await screen.findByRole("button", { name: "Save profile" }));
+    expect(await screen.findByTestId("status-card")).toBeInTheDocument();
+    const saved = engine.calls.find((c) => c.type === "save_profile")?.payload.profile as Record<string, unknown>;
+    expect(saved.mouse_multiplier_unit).toBe(0.02);
+    expect(saved.fov).toBe(84);
+  });
 });
+
