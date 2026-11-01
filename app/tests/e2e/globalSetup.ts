@@ -22,7 +22,18 @@ export default async function globalSetup() {
 
   const child: ChildProcess = spawn(
     enginePython(),
-    ["-m", "siegesense_engine", "--token", "e2e", "--data-dir", join(tmp, "data"), "--documents-dir", docs],
+    [
+      "-m",
+      "siegesense_engine",
+      "--token",
+      "e2e",
+      "--data-dir",
+      join(tmp, "data"),
+      "--documents-dir",
+      docs,
+      "--replay-input",
+      join(repo, "engine/tests/fixtures/warmup_replay.jsonl"),
+    ],
     { cwd: join(repo, "engine", "src"), stdio: ["pipe", "pipe", "inherit"] },
   );
 
