@@ -47,6 +47,32 @@ export type WindowMode = z.infer<typeof WindowMode>;
 
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
 
+// --- HUD regions (engine/src/siegesense_engine/hud/regions.py) -----------------------------
+export const Box = z
+  .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().gt(0).max(1), h: z.number().gt(0).max(1) })
+  .refine((b) => b.x + b.w <= 1.0001 && b.y + b.h <= 1.0001, "box must fit inside the screen");
+export type Box = z.infer<typeof Box>;
+
+export const HUD_REGION_KEYS = ["killfeed", "timer", "score_left", "score_right", "health", "centre"] as const;
+export type HudRegionKey = (typeof HUD_REGION_KEYS)[number];
+export const DEFAULT_HUD_REGIONS: Record<HudRegionKey, Box> = {
+  killfeed: { x: 0.7, y: 0.08, w: 0.29, h: 0.22 },
+  timer: { x: 0.47, y: 0.015, w: 0.06, h: 0.045 },
+  score_left: { x: 0.42, y: 0.015, w: 0.04, h: 0.045 },
+  score_right: { x: 0.54, y: 0.015, w: 0.04, h: 0.045 },
+  health: { x: 0.02, y: 0.88, w: 0.07, h: 0.07 },
+  centre: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 },
+};
+export const HudRegions = z.object({
+  killfeed: Box,
+  timer: Box,
+  score_left: Box,
+  score_right: Box,
+  health: Box,
+  centre: Box,
+});
+export type HudRegions = z.infer<typeof HudRegions>;
+
 /** Field schemas, exported individually so forms can validate one step at a time. */
 export const profileFields = {
   in_game_name: z.string().regex(NAME_PATTERN, "3–15 characters: letters, numbers, . _ -"),
@@ -62,6 +88,9 @@ export const profileFields = {
   hud_scale: int(50, 100).default(100),
   window_mode: WindowMode.default("unknown"),
   counts_per_360: z.number().gt(0).nullish(),
+  hud_regions: HudRegions.default(DEFAULT_HUD_REGIONS),
+  my_score_side: z.enum(["left", "right"]).default("left"),
+  capture_fps: int(20, 60).default(30),
 };
 
 export const Profile = z.object(profileFields);

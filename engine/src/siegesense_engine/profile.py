@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from .hud.regions import HudRegions
+
 ADS_KEYS: tuple[str, ...] = ("1x", "2.5x", "3x", "4x", "5x", "12x")
 WindowMode = Literal["fullscreen", "windowed", "borderless", "unknown"]
 NAME_PATTERN = r"^[A-Za-z0-9._-]{3,15}$"
@@ -25,6 +27,9 @@ class Profile(BaseModel):
     hud_scale: Annotated[int, Field(ge=50, le=100)] = 100
     window_mode: WindowMode = "unknown"
     counts_per_360: Annotated[float, Field(gt=0)] | None = None
+    hud_regions: HudRegions = HudRegions()
+    my_score_side: Literal["left", "right"] = "left"
+    capture_fps: Annotated[int, Field(ge=20, le=60)] = 30
 
     @field_validator("ads_sensitivity")
     @classmethod

@@ -2,6 +2,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_HUD_REGIONS } from "@shared/protocol";
 import { Root } from "@/App";
 import { EngineError } from "@/lib/engineClient";
 import { useNav } from "@/store/nav";
@@ -131,6 +132,9 @@ describe("setup wizard", () => {
         resolution_height: 1440,
         hud_scale: 100,
         window_mode: "borderless",
+        hud_regions: DEFAULT_HUD_REGIONS,
+        my_score_side: "left",
+        capture_fps: 30,
       },
     });
   });
