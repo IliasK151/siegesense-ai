@@ -1,0 +1,6 @@
+{"type":"save_profile","id":"3","ts":12,"payload":{"profile":{
+  "in_game_name":"Ash.Main","dpi":800,"yaw_sensitivity":10,"pitch_sensitivity":10,
+  "mouse_multiplier_unit":0.02,"x_factor_aiming":0.02,
+  "ads_sensitivity":{"1x":50,"2.5x":50,"3x":50,"4x":50,"5x":50,"12x":50},
+  "fov":84.0,"resolution_width":1920,"resolution_height":1080,"hud_scale":100,
+  "window_mode":"borderless","counts_per_360":null}}}
