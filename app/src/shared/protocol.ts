@@ -1,0 +1,150 @@
+// Wire protocol between the app and the engine. Mirrors engine/src/siegesense_engine/protocol.py
+// and profile.py. Both sides are tested against the samples in protocol/fixtures.
+import { z } from "zod";
+
+export const Envelope = z.object({
+  type: z.string(),
+  ts: z.number().int(),
+  id: z.string().nullish(),
+  payload: z.record(z.string(), z.unknown()).default({}),
+});
+export type Envelope = z.infer<typeof Envelope>;
+
+export const LIGHT_KEYS = ["game", "capture", "input", "hud", "coach", "voice"] as const;
+export const LightKey = z.enum(LIGHT_KEYS);
+export type LightKey = z.infer<typeof LightKey>;
+
+export const LightState = z.enum(["ok", "warn", "error", "off"]);
+export type LightState = z.infer<typeof LightState>;
+
+export const Light = z.object({
+  state: LightState,
+  label: z.string(),
+  detail: z.string(),
+  fix: z.string().nullish(),
+});
+export type Light = z.infer<typeof Light>;
+
+export const StatusPayload = z.object({
+  lights: z.record(LightKey, Light),
+});
+export type StatusPayload = z.infer<typeof StatusPayload>;
+
+export const ErrorInfo = z.object({ code: z.string(), message: z.string() });
+export type ErrorInfo = z.infer<typeof ErrorInfo>;
+
+export const ResponsePayload = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), data: z.unknown() }),
+  z.object({ ok: z.literal(false), error: ErrorInfo }),
+]);
+export type ResponsePayload = z.infer<typeof ResponsePayload>;
+
+export const ADS_KEYS = ["1x", "2.5x", "3x", "4x", "5x", "12x"] as const;
+export type AdsKey = (typeof ADS_KEYS)[number];
+export const NAME_PATTERN = /^[A-Za-z0-9._-]{3,15}$/;
+export const WindowMode = z.enum(["fullscreen", "windowed", "borderless", "unknown"]);
+export type WindowMode = z.infer<typeof WindowMode>;
+
+const int = (min: number, max: number) => z.number().int().min(min).max(max);
+
+/** Field schemas, exported individually so forms can validate one step at a time. */
+export const profileFields = {
+  in_game_name: z.string().regex(NAME_PATTERN, "3–15 characters: letters, numbers, . _ -"),
+  dpi: int(100, 32000),
+  yaw_sensitivity: int(1, 100),
+  pitch_sensitivity: int(1, 100),
+  mouse_multiplier_unit: z.number().gt(0).max(1).default(0.02),
+  x_factor_aiming: z.number().gt(0).max(1).default(0.02),
+  ads_sensitivity: z.partialRecord(z.enum(ADS_KEYS), int(1, 200)).default({}),
+  fov: z.number().min(60).max(90).default(75),
+  resolution_width: int(640, 7680).default(1920),
+  resolution_height: int(480, 4320).default(1080),
+  hud_scale: int(50, 100).default(100),
+  window_mode: WindowMode.default("unknown"),
+  counts_per_360: z.number().gt(0).nullish(),
+};
+
+export const Profile = z.object(profileFields);
+export type Profile = z.infer<typeof Profile>;
+export type ProfileField = keyof typeof profileFields;
+
+export const GameSettingsFile = z.object({ path: z.string(), modified: z.number() });
+export type GameSettingsFile = z.infer<typeof GameSettingsFile>;
+
+export const GameSettingsImport = z.object({
+  values: Profile.partial(),
+  missing: z.array(z.string()),
+  source: z.string(),
+});
+export type GameSettingsImport = z.infer<typeof GameSettingsImport>;
+
+// --- Warm-up Mode (engine/src/siegesense_engine/warmup.py) ---------------------------------
+export const Conversion = z.enum(["calibrated", "estimated"]);
+export type Conversion = z.infer<typeof Conversion>;
+
+export const WarmupMetrics = z.object({
+  elapsed_s: z.number(),
+  flicks: z.number().int(),
+  corrected: z.number().int(),
+  overshoots: z.number().int(),
+  overshoot_rate: z.number(),
+  correction_rate: z.number(),
+  avg_amplitude: z.number(),
+  avg_peak_speed: z.number(),
+  shots: z.number().int(),
+  taps: z.number().int(),
+  bursts: z.number().int(),
+  sprays: z.number().int(),
+  moving_shots: z.number().int(),
+  moving_shot_rate: z.number(),
+  strafe_switches: z.number().int(),
+  crouch_spams: z.number().int(),
+  ads_jitter_per_s: z.number(),
+  score: z.number().int().nullable(),
+  conversion: Conversion,
+});
+export type WarmupMetrics = z.infer<typeof WarmupMetrics>;
+
+export const Flick = z.object({
+  id: z.number().int(),
+  t_peak: z.number(),
+  amplitude: z.number(),
+  peak_speed: z.number(),
+  duration_ms: z.number(),
+  direction: z.number(),
+  reversal: z.number(),
+  corrected: z.boolean(),
+  overshoot: z.boolean(),
+  shot: z.boolean(),
+  trace: z.array(z.tuple([z.number(), z.number()])),
+});
+export type Flick = z.infer<typeof Flick>;
+
+export const Drill = z.object({ key: z.string(), title: z.string(), text: z.string() });
+export type Drill = z.infer<typeof Drill>;
+
+export const HistoryPoint = z.object({ started_at: z.string(), score: z.number().int().nullable() });
+export type HistoryPoint = z.infer<typeof HistoryPoint>;
+
+export const WarmupSummary = z.object({
+  id: z.number().int().nullable(),
+  started_at: z.string(),
+  duration_s: z.number(),
+  metrics: WarmupMetrics,
+  drill: Drill.nullable(),
+  message: z.string(),
+  history: z.array(HistoryPoint),
+});
+export type WarmupSummary = z.infer<typeof WarmupSummary>;
+
+// --- 360° calibration (engine/src/siegesense_engine/calibration.py) -------------------------
+export const CalibrationState = z.object({
+  phase: z.enum(["armed", "measuring", "done", "cancelled"]),
+  runs: z.array(z.number().int()),
+  current_counts: z.number().int(),
+  target_runs: z.number().int(),
+  result: z.number().nullable(),
+  spread: z.number().nullable(),
+  warning: z.string().nullable(),
+});
+export type CalibrationState = z.infer<typeof CalibrationState>;
